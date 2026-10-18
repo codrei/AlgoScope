@@ -1,6 +1,7 @@
 import { bubbleSort, insertionSort, mergeSort, quickSort, selectionSort } from './sorting';
 import { fibDp, knapsack, lcs } from './dp';
-import { LESSONS } from './lessons';
+import { linkedListClass, mazeGame, queueStruct, stackStruct } from './lessons';
+import { activitySelection, coinChange, countingSort, floydWarshall, hashTable, heapSort, nQueens, primMst, stringMatching, topologicalSort } from './more';
 import { bfs, dfs, dijkstra } from './graphs';
 import { factorial, fibonacci, hanoi } from './recursion';
 import { binarySearch, linearSearch } from './searching';
@@ -10,26 +11,39 @@ import type { Example } from './types';
 export type { Example, Topic } from './types';
 
 export const EXAMPLES: Example[] = [
-  ...LESSONS,
   bubbleSort,
   selectionSort,
   insertionSort,
   mergeSort,
   quickSort,
+  heapSort,
+  countingSort,
   linearSearch,
   binarySearch,
+  stringMatching,
   factorial,
   fibonacci,
   hanoi,
   stackArray,
+  stackStruct,
   queueArray,
+  queueStruct,
   balancedParens,
   linkedList,
+  linkedListClass,
   bst,
+  hashTable,
+  mazeGame,
   fibDp,
   knapsack,
   lcs,
   bfs,
   dfs,
   dijkstra,
+  topologicalSort,
+  primMst,
+  floydWarshall,
+  nQueens,
+  coinChange,
+  activitySelection,
 ];

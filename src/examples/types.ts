@@ -1,6 +1,6 @@
 import type { Lang } from '../engine/ir';
 
-export type Topic = 'From the lessons' | 'Sorting' | 'Searching' | 'Recursion' | 'Data Structures' | 'Dynamic Programming' | 'Graphs';
+export type Topic = 'Sorting' | 'Searching' | 'Recursion' | 'Data Structures' | 'Dynamic Programming' | 'Graphs' | 'Greedy & Backtracking';
 
 export interface Example {
   id: string;
@@ -16,8 +16,8 @@ export interface Example {
   output: string;
   /** optional stdin for the example */
   stdin?: string;
-  /** every built-in algorithm has all five languages; lesson examples only the one used in class */
+  /** most examples have all five languages; programs from the slides only the one they use */
   code: Partial<Record<Lang, string>> & { [K in Lang]?: string };
-  /** for lesson examples: the language the slides use */
+  /** single-language examples: the only language they have */
   only?: Lang;
 }

@@ -2,7 +2,8 @@ import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Sun, Tre
 import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
 
-const TOPICS: Topic[] = ['From the lessons', 'Sorting', 'Searching', 'Recursion', 'Data Structures', 'Dynamic Programming', 'Graphs'];
+const LANG_LABEL = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' } as const;
+const TOPICS: Topic[] = ['Sorting', 'Searching', 'Recursion', 'Data Structures', 'Dynamic Programming', 'Graphs', 'Greedy & Backtracking'];
 
 export function BrandMark() {
   return (
@@ -77,7 +78,7 @@ export function TopBar(p: Props) {
                       }}
                     >
                       <span>{e.title}</span>
-                      <small>{e.time}</small>
+                      <small>{e.only && <span className="menu-lang">{LANG_LABEL[e.only]} only</span>}{e.time}</small>
                     </button>
                   ))}
                 </div>

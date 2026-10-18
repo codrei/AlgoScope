@@ -53,7 +53,7 @@ That's how we find unsupported features before the professor does.
 7. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
    comparing all sorts.
 8. **Own code (30 s):** paste a function from a slide (no `main()`), Run, then press **Add a main() for me**.
-9. **The lessons (30 s):** Examples → From the lessons → Lesson 6 Stack, then SMOLMAZE to show the console screen.
+9. **Slide programs (30 s):** Examples → Data Structures → Stack Using a Struct, then Maze Game to show the console screen.
 
 ## Likely questions
 

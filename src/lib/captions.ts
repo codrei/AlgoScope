@@ -199,6 +199,76 @@ const CAPTIONS: Record<string, CaptionFn> = {
     if (c.inFn('dijkstra')) return 'Start: the source has distance 0, every other vertex ∞.';
     return null;
   },
+  'heap-sort': (c) => {
+    const n = c.num('n');
+    const i = c.num('i');
+    if (c.inFn('heapify') && i !== undefined) return `Repair the heap at index ${i}: a parent must be bigger than both children (heap size ${n ?? ''}).`;
+    if (c.inFn('heapSort') && i !== undefined) return `Move the largest value (arr[0]) into its final place, then repair the smaller heap.`;
+    if (c.inFn('heapSort')) return 'First build a max-heap: the largest value rises to the top (arr[0]).';
+    return null;
+  },
+  'counting-sort': (c) => {
+    if (!c.inFn('countingSort')) return null;
+    const k = c.num('k');
+    const v = c.num('v');
+    if (k !== undefined && v !== undefined) return `Write the value ${v} back as many times as it was counted. The next free position is ${k}.`;
+    if (c.step.frames.at(-1)?.vars.some(([n]) => n === 'count')) return 'Tally each value: count[v] is how many times v appears. No two elements are ever compared.';
+    return 'Find the largest value, so the count array knows how big to be.';
+  },
+  'string-matching': (c) => {
+    const i = c.num('i');
+    const j = c.num('j');
+    if (!c.inFn('search') || i === undefined) return null;
+    return `Try the pattern starting at text index ${i}${j !== undefined ? `: ${j} character${j === 1 ? '' : 's'} matched so far` : ''}.`;
+  },
+  'hash-table': (c) => {
+    const key = c.num('key');
+    if (key === undefined) return null;
+    if (c.inFn('insert')) return `Insert ${key}: its home slot is ${key} % 7 = ${key % 7}. If that slot is taken, try the next one.`;
+    if (c.inFn('search')) return `Search for ${key}: start at slot ${key % 7} and move forward until we find it or reach an empty slot.`;
+    return null;
+  },
+  'topological-sort': (c) => {
+    if (!c.inFn('topologicalSort')) return null;
+    const node = c.num('node');
+    if (node !== undefined) return `Output vertex ${node}, then remove its edges. A neighbor whose indegree drops to 0 joins the queue.`;
+    return 'Count the edges coming into each vertex (its indegree). Vertices with indegree 0 can go first.';
+  },
+  'prim-mst': (c) => {
+    if (c.inFn('minKey')) return 'Pick the vertex outside the tree with the cheapest edge into it.';
+    const u = c.num('u');
+    if (c.inFn('prim') && u !== undefined) return `Vertex ${u} joins the tree. Update the cheapest known edge to each vertex still outside.`;
+    if (c.inFn('prim')) return 'Start the tree at vertex 0. Every other vertex has no known edge yet (∞).';
+    return null;
+  },
+  'floyd-warshall': (c) => {
+    const k = c.num('k');
+    const i = c.num('i');
+    const j = c.num('j');
+    if (!c.inFn('floydWarshall') || k === undefined) return null;
+    if (i === undefined || j === undefined) return `Round ${k + 1}: allow vertex ${k} as a stop on every path.`;
+    if (i === k || j === k || i === j) return `Round ${k + 1}: a path from or to vertex ${k} itself cannot get shorter by stopping at ${k}.`;
+    return `Is going ${i} → ${k} → ${j} shorter than the best known path ${i} → ${j}?`;
+  },
+  'n-queens': (c) => {
+    const row = c.num('row');
+    const col = c.num('col');
+    if (row === undefined) return null;
+    if (c.inFn('isSafe')) return `Is row ${row}, column ${col} safe? Look for a queen in the same column and on both diagonals above.`;
+    if (c.inFn('solve')) return row >= 4 ? 'All 4 queens are placed, so the search can stop.' : row === 0 ? 'Row 0: try each column for the first queen.' : `Row ${row}: try each column. If none is safe, go back and move the queen in row ${row - 1}.`;
+    return null;
+  },
+  'coin-change': (c) => {
+    const amount = c.num('amount');
+    if (!c.inFn('coinChange') || amount === undefined) return null;
+    return amount === 0 ? 'Nothing left to pay.' : `${amount} left to pay: take the biggest coin that still fits.`;
+  },
+  'activity-selection': (c) => {
+    const i = c.num('i');
+    const last = c.num('last');
+    if (!c.inFn('selectActivities') || i === undefined || last === undefined) return null;
+    return `Activity ${i} starts at ${c.arr('start', i) ?? '?'}; the last chosen activity ends at ${c.arr('finish', last) ?? '?'}. Take it only if it does not overlap.`;
+  },
 };
 
 /** The algorithm-level caption for a step of a built-in example (or null). */

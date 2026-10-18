@@ -145,10 +145,13 @@ elements) for animations, and the Complexity Lab for bigger sizes.
 
 | Topic | Examples |
 |---|---|
-| From the lessons | Lesson 5 Linked List class (C++), Lesson 6 Stack and Queue / circular queue structs (C), Week 5 linear & binary search, Week 6-7 selection / insertion / bubble and quick sort (Python), Week 8 heap sort and insertion sort (Java), Week 9 recursion & factorial, SMOLMAZE Turbo C++ maze game |
-| Sorting | Bubble, Selection, Insertion, Merge, Quick Sort |
-| Searching | Linear Search, Binary Search |
+| Sorting | Bubble, Selection, Insertion, Merge, Quick, Heap, Counting Sort |
+| Searching | Linear Search, Binary Search, String Matching (brute force) |
 | Recursion | Factorial, Fibonacci (recursive), Tower of Hanoi |
-| Data Structures | Stack (array), Queue (circular array), Balanced Parentheses, Linked List (insert & reverse), Binary Search Tree |
+| Data Structures | Stack (array), Stack Using a Struct (C), Queue (circular array), Queue and Circular Queue (C), Balanced Parentheses, Linked List (insert & reverse), Linked List (insert, find, delete; C++), Binary Search Tree, Hash Table (linear probing), Maze Game (2D array; Turbo C++) |
 | Dynamic Programming | Fibonacci (DP table), 0/1 Knapsack, Longest Common Subsequence |
-| Graphs | BFS, DFS, Dijkstra's Shortest Path |
+| Graphs | BFS, DFS, Dijkstra's Shortest Path, Topological Sort, Prim's Minimum Spanning Tree, Floyd–Warshall |
+| Greedy & Backtracking | N-Queens, Coin Change (greedy), Activity Selection |
+
+Examples marked with a language (C, C++) exist only in that language, the way they appear on the course slides.
+Every other example runs in all five languages and prints the same output.

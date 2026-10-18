@@ -167,11 +167,11 @@ test('playback controls fit on one row on a 1366px laptop', async ({ page }) => 
   expect(h).toBeLessThan(80);
 });
 
-test('the lessons menu opens the professor\'s own programs', async ({ page }) => {
+test('the menu opens a single-language program from the slides', async ({ page }) => {
   await fresh(page);
   await page.getByRole('button', { name: /Bubble Sort/ }).click();
-  await page.getByRole('menuitem', { name: /Lesson 6 · Stack/ }).click();
-  await expect(page.locator('.viz-header h1')).toHaveText('Lesson 6 · Stack (struct)');
+  await page.getByRole('menuitem', { name: /Stack Using a Struct/ }).click();
+  await expect(page.locator('.viz-header h1')).toHaveText('Stack Using a Struct');
   await page.getByRole('button', { name: 'Run' }).click();
   await expect(page.locator('.step-say')).toBeVisible();
   await page.keyboard.press('End');
@@ -179,7 +179,7 @@ test('the lessons menu opens the professor\'s own programs', async ({ page }) =>
 });
 
 test('the Turbo C maze draws on the console screen', async ({ page }) => {
-  await fresh(page, '?example=lesson-smolmaze&run=1');
+  await fresh(page, '?example=maze-game&run=1');
   await expect(page.locator('.step-say')).toBeVisible();
   await page.keyboard.press('End');
   await expect(page.locator('.screen')).toContainText('Congrats, you found the secret door!!!');

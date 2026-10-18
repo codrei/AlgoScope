@@ -268,14 +268,14 @@ export function lowerCSharp(root: Node, requireEntry = true): Program {
       }
       case 'for_statement': {
         const init: Stmt[] = [];
-        for (const i of fields(n, 'initializer')) {
+        for (const i of fields(n, 'initializer').filter((x) => x.isNamed)) {
           if (i.type === 'variable_declaration') init.push(varDecl(i));
           else init.push({ k: 'expr', ln, e: expr(i) });
         }
         const c = f(n, 'condition');
         return [{
           k: 'for', ln, init, c: c ? expr(c) : undefined, src: c ? c.text : 'true',
-          update: fields(n, 'update').map(expr), body: bodyOf(f(n, 'body')),
+          update: fields(n, 'update').filter((x) => x.isNamed).map(expr), body: bodyOf(f(n, 'body')),
         }];
       }
       case 'for_each_statement': {

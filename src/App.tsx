@@ -44,7 +44,7 @@ function exampleCode(e: Example, l: Lang): string {
   if (c !== undefined) return c;
   const comment = l === 'python' ? '#' : '//';
   const other = e.only ? LANG_NAMES[e.only] : 'another language';
-  return `${comment} "${e.title}" is written in ${other}, the language used in the lesson.\n${comment} Switch to the ${other} tab to run it, or write your own ${LANG_NAMES[l]} version here.\n`;
+  return `${comment} "${e.title}" is written in ${other} only.\n${comment} Switch to the ${other} tab to run it, or write your own ${LANG_NAMES[l]} version here.\n`;
 }
 
 const allCodes = (e: Example) => Object.fromEntries(LANG_IDS.map((l) => [l, exampleCode(e, l)])) as Record<Lang, string>;

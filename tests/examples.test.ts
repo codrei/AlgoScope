@@ -12,7 +12,7 @@ describe.each(EXAMPLES.map((e) => [e.title, e] as const))('%s', (_title, ex) => 
     expect(r.compileError).toBeUndefined();
     expect(r.trace!.error).toBeUndefined();
     expect(r.trace!.truncated).toBeFalsy();
-    if (ex.id === 'lesson-smolmaze') expect(r.trace!.steps.at(-1)!.screen!.join('\n')).toContain('Congrats, you found the secret door!!!');
+    if (ex.id === 'maze-game') expect(r.trace!.steps.at(-1)!.screen!.join('\n')).toContain('Congrats, you found the secret door!!!');
     else expect(r.trace!.stdout).toBe(ex.output);
   });
 });
