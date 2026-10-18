@@ -244,3 +244,58 @@ export function computeImportance(trace: Trace): Map<number, number> {
   }
   return score;
 }
+
+// ---------------------------------------------------------------- key steps
+
+const KEY_KINDS = new Set(['start', 'end', 'error', 'call', 'return', 'print', 'compare', 'swap']);
+
+/**
+ * The steps worth stopping on in class: compares, swaps, changes to arrays and
+ * nodes, pointers moving, new data, calls/returns and output. Loop bookkeeping
+ * (i++, condition checks, temp variables) is skipped.
+ */
+export function keySteps(trace: Trace): number[] {
+  const out: number[] = [];
+  trace.steps.forEach((s, i) => {
+    const prev = trace.steps[i - 1];
+    let key = KEY_KINDS.has(s.kind) || s.touches.some((t) => t.role !== 'read');
+    if (!key && prev) {
+      for (const [id, h] of Object.entries(s.heap)) {
+        const p = prev.heap[Number(id)];
+        if (!p) {
+          key = true; // new array / node / map
+          break;
+        }
+        if (h.kind !== 'arr' && p !== h && JSON.stringify(p) !== JSON.stringify(h)) {
+          key = true; // a node's field or a map changed
+          break;
+        }
+      }
+    }
+    if (!key && prev) {
+      // a pointer variable moved (cur = cur.next, prev = cur...)
+      const f = s.frames[s.frames.length - 1];
+      const pf = f && prev.frames.find((x) => x.fid === f.fid);
+      if (f && pf) {
+        for (const [n, v] of f.vars) {
+          const isPtr = v.t === 'null' || (v.t === 'r' && s.heap[v.id]?.kind === 'obj');
+          if (!isPtr) continue;
+          const old = pf.vars.find((x) => x[0] === n);
+          if (!old || JSON.stringify(old[1]) !== JSON.stringify(v)) {
+            key = true;
+            break;
+          }
+        }
+      }
+    }
+    if (key) out.push(i);
+  });
+  // the first half of a swap (arr[j] = arr[j + 1]) is shown by the swap step itself
+  const isWriteOnly = (i: number) => {
+    const s = trace.steps[i];
+    return s.kind !== 'swap' && s.touches.some((t) => t.role === 'write') && !s.touches.some((t) => t.role === 'swap' || t.role === 'compare');
+  };
+  const trimmed = out.filter((i, k) => !(isWriteOnly(i) && out[k + 1] === i + 1 && trace.steps[i + 1].kind === 'swap'));
+  // a run of prints (an output loop) collapses to its last step
+  return trimmed.filter((i, k) => !(trace.steps[i].kind === 'print' && trimmed[k + 1] !== undefined && trace.steps[trimmed[k + 1]].kind === 'print'));
+}

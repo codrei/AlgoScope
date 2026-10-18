@@ -19,6 +19,10 @@ interface Props {
   header: HeaderInfo;
   trace: Trace | null;
   stepIndex: number;
+  /** position among the steps the controls move through, and how many there are */
+  position: number;
+  viewTotal: number;
+  caption: string | null;
   locks: Map<number, LockInfo>;
   calls: Map<number, CallNode>;
   importance: Map<number, number>;
@@ -28,7 +32,7 @@ interface Props {
   present: boolean;
 }
 
-export function Visualizer({ header, trace, stepIndex, locks, calls, importance, mode, onMode, code, present }: Props) {
+export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, locks, calls, importance, mode, onMode, code, present }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
@@ -42,11 +46,11 @@ export function Visualizer({ header, trace, stepIndex, locks, calls, importance,
             <h1>{header.title}</h1>
           </div>
           <div className="seg mode-toggle" role="tablist" aria-label="How much to show">
-            <button role="tab" aria-selected={beginner} className={beginner ? 'active' : ''} onClick={() => onMode('beginner')} title="Only the picture and a plain-English explanation">
-              Beginner
+            <button role="tab" aria-selected={beginner} className={beginner ? 'active' : ''} onClick={() => onMode('beginner')} title="Only the main picture, the explanation and the current variables">
+              Focus
             </button>
             <button role="tab" aria-selected={!beginner} className={!beginner ? 'active' : ''} onClick={() => onMode('detailed')} title="Everything: counters, call stack, Big-O, all data">
-              Detailed
+              Full detail
             </button>
           </div>
         </div>
@@ -66,7 +70,7 @@ export function Visualizer({ header, trace, stepIndex, locks, calls, importance,
         <div className="present-grid">
           <div className="present-main">
             <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-            <StepCard step={step} stepIndex={stepIndex} total={trace!.steps.length} locks={locks} />
+            <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} locks={locks} />
             <VarChips step={step} prev={prev} />
             <OutputBox trace={trace!} step={step} compact />
           </div>
@@ -77,7 +81,7 @@ export function Visualizer({ header, trace, stepIndex, locks, calls, importance,
       ) : (
         <>
           <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-          <StepCard step={step} stepIndex={stepIndex} total={trace!.steps.length} locks={locks} />
+          <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} locks={locks} />
           {beginner ? (
             <>
               <VarChips step={step} prev={prev} />
@@ -161,7 +165,7 @@ function Stage(p: {
     const top = new Set(
       [...keep]
         .sort((a, b) => (isMatrixGraph(b) ? 1e9 : score(b)) - (isMatrixGraph(a) ? 1e9 : score(a)))
-        .slice(0, 2)
+        .slice(0, 3)
         .map((a) => a.id),
     );
     arrays = keep.filter((a) => top.has(a.id));
@@ -188,7 +192,7 @@ function Stage(p: {
     const info = locks.get(a.id);
     const locked = lockedCells(info, stepIndex, isLast);
     const allLocked = !!info && locked.size === a.item.items.length && a.item.items.length > 1;
-    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner} />);
+    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner && arrays.length === 1} />);
   }
   if (objects.roots.length) views.push(<GraphView key="graph" step={step} prev={prev} roots={objects.roots} />);
   for (const m of maps.slice(0, beginner ? 1 : 3)) if (m.item.kind === 'map') views.push(<MapView key={m.id} item={m.item} names={m.names} step={step} />);
@@ -236,7 +240,7 @@ function Legend({ step, arrays, locks, stepIndex, isLast }: { step: Step; arrays
   );
 }
 
-function StepCard({ step, stepIndex, total, locks }: { step: Step; stepIndex: number; total: number; locks: Map<number, LockInfo> }) {
+function StepCard({ step, stepIndex, position, total, caption, locks }: { step: Step; stepIndex: number; position: number; total: number; caption: string | null; locks: Map<number, LockInfo> }) {
   const [showCode, setShowCode] = useState(false);
   const notes: string[] = [];
   for (const [id, info] of locks) {
@@ -250,8 +254,9 @@ function StepCard({ step, stepIndex, total, locks }: { step: Step; stepIndex: nu
     <div className={`step-card ${step.kind}`} role="status" aria-live="polite">
       <div className="step-card-top">
         <span className="step-label">What just happened</span>
-        <span className="step-num">Step {stepIndex + 1} of {total}</span>
+        <span className="step-num">Step {position + 1} of {total}</span>
       </div>
+      {caption && <p className="step-caption">{caption}</p>}
       <p className="step-say">{step.say}</p>
       {notes.length > 0 && step.kind !== 'end' && (
         <p className="step-lock">{notes.join(', ')} {notes.length > 1 ? 'are' : 'is'} now in the final sorted place.</p>

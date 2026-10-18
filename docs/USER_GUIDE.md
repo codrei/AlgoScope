@@ -14,17 +14,26 @@ It is meant for teaching **Data Structures & Algorithms** and **Algorithms & Com
 | **Visualization (right)** | Algorithm name and Big-O badges, the picture of the data, the step explanation, counters, call stack and output |
 | **Playback bar (bottom right)** | first / back / play-pause / forward / last, a slider to jump to any step, and the speed |
 
-## Beginner and Detailed view
+## Focus / Full detail and Key steps / Every line
 
-The switch at the top right of the visualization chooses how much to show.
+Two switches control how much the class sees.
 
-- **Beginner** (the default): the main picture, a plain-English **What just happened** box
-  (for example *"Is arr[0] = 5 greater than arr[1] = 1? Yes, so the code inside the if runs."*), and the current
-  function's variables. Click **In code terms** in the box to see the technical version.
-- **Detailed**: everything: Big-O badges, counters, the full call stack, helper arrays, the adjacency matrix
-  next to the graph, and the recursion tree.
+- **Focus** (default, top right of the visualization): the main picture, a blue line saying what the
+  algorithm is doing (*"Pass 2 of 5: compare neighbors and push the largest unsorted value to the end."*),
+  a plain-English **What just happened** sentence (*"Is arr[0] = 5 greater than arr[1] = 1? Yes, so the code
+  inside the if runs."*) and the current variables. **In code terms** shows the technical version.
+- **Full detail**: also Big-O badges, counters, the full call stack, helper arrays, the adjacency matrix next to the
+  graph, and the recursion tree.
+- **Key steps** (default, in the playback bar): stops only on compares, swaps, changes, pointer moves, calls and
+  output. Bubble Sort takes 28 stops instead of 84.
+- **Every line**: stops on every line, useful when tracing a loop in detail.
 
-Start a new topic in Beginner view and switch to Detailed once students follow the idea.
+The explanation box stays pinned at the bottom of the panel, so it is visible even on small laptop screens.
+
+## Offline use
+
+After AlgoScope has been opened once (with internet), it keeps a copy in the browser. It opens and runs all five
+languages without internet afterwards, which is useful if the classroom Wi-Fi is unreliable. Open it once before class.
 
 ## 2. Running an algorithm
 
@@ -34,7 +43,7 @@ Start a new topic in Beginner view and switch to Detailed once students follow t
 3. Pause with **Space**, then step with **←** and **→** while you explain each line.
    **Home** / **End** jump to the first / last step.
 
-In Detailed view and under **In code terms**, each step is also described technically, for example:
+Under **In code terms**, each step is also described technically, for example:
 
 - `COMPARE arr[0] (5) > arr[1] (1) → true`
 - `SWAP arr[0] ↔ arr[1]`

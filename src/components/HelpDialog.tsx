@@ -28,10 +28,15 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><kbd>Space</kbd> play / pause · <kbd>←</kbd> <kbd>→</kbd> one step back / forward · <kbd>Home</kbd> <kbd>End</kbd> first / last step. Drag the slider to jump anywhere.</li>
           <li>The highlighted line in the editor is the line that just ran. The <b>What just happened</b> box explains it in plain English. Open <b>In code terms</b> to see the technical version.</li>
         </ul>
-        <h3>Beginner and Detailed view</h3>
+        <h3>Focus and Full detail</h3>
         <ul>
-          <li><b>Beginner</b> (the default) shows only the main picture, the explanation and the current variables.</li>
-          <li><b>Detailed</b> adds the Big-O badges, counters (comparisons, swaps, calls), the full call stack, helper arrays and the recursion tree.</li>
+          <li><b>Focus</b> (the default) shows the main picture, what the algorithm is doing (blue line), the explanation and the current variables.</li>
+          <li><b>Full detail</b> adds the Big-O badges, counters (comparisons, swaps, calls), the full call stack, helper arrays and the recursion tree.</li>
+        </ul>
+        <h3>Key steps and Every line</h3>
+        <ul>
+          <li><b>Key steps</b> (the default) stops only where something happens: compares, swaps, changes, pointers moving, calls and output. Bubble Sort takes 28 key steps instead of 84 lines.</li>
+          <li><b>Every line</b> stops on every line that runs, including loop counters and temporary variables.</li>
         </ul>
         <h3>What the colors mean</h3>
         <div className="legend">

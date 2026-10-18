@@ -10,9 +10,11 @@ interface Props {
   onIndex: (i: number) => void;
   onPlay: () => void;
   onSpeed: (s: number) => void;
+  keyOnly: boolean;
+  onKeyOnly: (v: boolean) => void;
 }
 
-export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpeed }: Props) {
+export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpeed, keyOnly, onKeyOnly }: Props) {
   const disabled = total === 0;
   const atEnd = index >= total - 1;
   return (
@@ -43,6 +45,14 @@ export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpee
         aria-label="Step"
       />
       <span className="step-count">{total ? `${index + 1} / ${total}` : '0 / 0'}</span>
+      <div className="seg step-mode" role="tablist" aria-label="Which steps to show">
+        <button role="tab" aria-selected={keyOnly} className={keyOnly ? 'active' : ''} onClick={() => onKeyOnly(true)} title="Stop only on compares, swaps, changes and calls">
+          Key steps
+        </button>
+        <button role="tab" aria-selected={!keyOnly} className={!keyOnly ? 'active' : ''} onClick={() => onKeyOnly(false)} title="Stop on every line that runs">
+          Every line
+        </button>
+      </div>
       <select className="speed" value={speed} onChange={(e) => onSpeed(Number(e.target.value))} aria-label="Speed" title="Playback speed">
         {SPEEDS.map((s) => (
           <option key={s} value={s}>{s}×</option>

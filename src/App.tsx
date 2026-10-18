@@ -9,7 +9,8 @@ import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visuali
 import { configureEngine, preload, runCode, type Trace } from './engine';
 import type { Lang } from './engine/ir';
 import { EXAMPLES, type Example } from './examples';
-import { buildCallTree, computeImportance, computeLocks, type CallNode, type LockInfo } from './lib/analysis';
+import { buildCallTree, computeImportance, computeLocks, keySteps, type CallNode, type LockInfo } from './lib/analysis';
+import { captionFor } from './lib/captions';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -68,6 +69,7 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [lab, setLab] = useState(P.lab);
   const [zoom, setZoom] = useState(() => load('as.zoom', 1));
+  const [keyOnly, setKeyOnly] = useState(() => load('as.keyOnly', true));
   const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
 
   const code = codes[lang];
@@ -84,6 +86,7 @@ export default function App() {
   useEffect(() => save('as.speed', speed), [speed]);
   useEffect(() => save('as.zoom', zoom), [zoom]);
   useEffect(() => save('as.mode', mode), [mode]);
+  useEffect(() => save('as.keyOnly', keyOnly), [keyOnly]);
   useEffect(() => save('as.example', example.id), [example]);
   useEffect(() => {
     preload(lang).catch(() => undefined);
@@ -129,35 +132,48 @@ export default function App() {
     }
   }, [run]);
 
+  // In "key steps" mode playback only stops on steps that matter (compares, swaps,
+  // changes, calls...). `view` lists the trace indexes the controls move through.
+  const keyIdx = useMemo(() => (trace ? keySteps(trace) : []), [trace]);
+  const view = useMemo(
+    () => (!trace ? [] : keyOnly && keyIdx.length > 1 ? keyIdx : trace.steps.map((_, i) => i)),
+    [trace, keyOnly, keyIdx],
+  );
+  const pos = useMemo(() => {
+    let p = 0;
+    for (let k = 0; k < view.length; k++) if (view[k] <= stepIndex) p = k;
+    return p;
+  }, [view, stepIndex]);
+  const total = view.length;
+
   // playback timer
-  const total = trace?.steps.length ?? 0;
   useEffect(() => {
     if (!playing || !trace) return;
-    if (stepIndex >= total - 1) {
+    if (pos >= total - 1) {
       setPlaying(false);
       return;
     }
-    const t = window.setTimeout(() => setStepIndex((i) => Math.min(i + 1, total - 1)), 1000 / speed);
+    const t = window.setTimeout(() => setStepIndex(view[pos + 1]), 1000 / speed);
     return () => window.clearTimeout(t);
-  }, [playing, stepIndex, speed, total, trace]);
+  }, [playing, pos, speed, total, trace, view]);
 
   const goto = useCallback(
-    (i: number) => {
+    (p: number) => {
       setPlaying(false);
-      setStepIndex(Math.max(0, Math.min(i, total - 1)));
+      if (view.length) setStepIndex(view[Math.max(0, Math.min(p, view.length - 1))]);
     },
-    [total],
+    [view],
   );
 
   const togglePlay = useCallback(() => {
     if (!trace) return;
-    if (!playing && stepIndex >= total - 1) setStepIndex(0);
+    if (!playing && pos >= total - 1) setStepIndex(view[0] ?? 0);
     setPlaying(!playing);
-  }, [trace, playing, stepIndex, total]);
+  }, [trace, playing, pos, total, view]);
 
   // keyboard shortcuts (ignored while typing in the editor or a field)
-  const keyRef = useRef({ goto, togglePlay, stepIndex, total });
-  keyRef.current = { goto, togglePlay, stepIndex, total };
+  const keyRef = useRef({ goto, togglePlay, pos, total });
+  keyRef.current = { goto, togglePlay, pos, total };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -169,10 +185,10 @@ export default function App() {
         k.togglePlay();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        k.goto(k.stepIndex + 1);
+        k.goto(k.pos + 1);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        k.goto(k.stepIndex - 1);
+        k.goto(k.pos - 1);
       } else if (e.key === 'Home') k.goto(0);
       else if (e.key === 'End') k.goto(k.total - 1);
     };
@@ -209,7 +225,7 @@ export default function App() {
       };
 
   const step = trace?.steps[stepIndex];
-  const atEnd = stepIndex === total - 1;
+  const atEnd = !!trace && stepIndex === trace.steps.length - 1;
   const errorLine = compileError?.line || (trace?.error && atEnd ? trace.error.line : 0) || null;
   const errorMsg = compileError?.msg ?? (trace?.error && atEnd ? trace.error.msg : null);
 
@@ -259,14 +275,14 @@ export default function App() {
         )}
         <section className="panel viz" aria-label="Visualization">
           <div className="viz-scroll" style={{ zoom }}>
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
             {trace?.truncated && atEnd && (
               <div className="notice">
-                Stopped after {total.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).
+                Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).
               </div>
             )}
           </div>
-          <Playback index={stepIndex} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} />
+          <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} />
         </section>
       </main>
       {help && <HelpDialog onClose={() => setHelp(false)} />}

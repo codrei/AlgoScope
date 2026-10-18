@@ -83,6 +83,10 @@ body,
   margin: 0;
 }
 
+code, pre, kbd, .present-code, .cells, .console, .vars, .var-chip, .step-code, .status, .grid2d, .map-view, .graph-svg, .marker, .lab-table {
+  font-variant-ligatures: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -1810,4 +1814,65 @@ input {
   .topbar-btn .label.keep {
     max-width: 120px;
   }
+}
+
+.step-caption {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--nu-blue);
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .step-caption {
+  color: var(--nu-gold);
+}
+
+.step-mode {
+  margin: 0;
+}
+
+.step-mode button {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+/* readable from the back of a classroom */
+.main.present .step-say { font-size: 23px; }
+.main.present .step-caption { font-size: 17px; }
+.main.present .step-card-top,
+.main.present .var-title,
+.main.present .struct-label { font-size: 13px; }
+.main.present .var-chip { font-size: 16px; }
+.main.present .viz-header.compact h1 { font-size: 30px; }
+.main.present .stage-legend { font-size: 14px; }
+.step-card-top, .var-title { font-size: 12px; }
+
+.playback {
+  gap: 6px;
+}
+
+.scrub {
+  min-width: 60px;
+}
+
+.step-count {
+  min-width: 0;
+}
+
+@media (max-width: 1250px) {
+  .playback .pb-btn:not(.play):not(.labeled) {
+    display: none;
+  }
+}
+
+/* the explanation always stays in view at the bottom of the panel */
+.viz-scroll > .step-card,
+.present-main > .step-card {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  box-shadow: 0 -8px 18px -6px rgba(20, 20, 60, 0.12);
+  background: color-mix(in srgb, var(--surface-2) 96%, transparent);
+  backdrop-filter: blur(4px);
 }

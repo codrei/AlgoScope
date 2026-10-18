@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 tests/zz-*.test.ts
 public/grammars
+test-results
+playwright-report
