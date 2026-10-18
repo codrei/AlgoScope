@@ -1,9 +1,9 @@
 import { Layers, Terminal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
-import { lockedCells, structuresFor, type LockInfo } from '../lib/analysis';
+import { lockedCells, recursionRoot, structuresFor, type CallNode, type LockInfo } from '../lib/analysis';
 import { ArrayView, cellText } from './ArrayView';
-import { GraphView, Grid2D, isAdjacencyMatrix, MapView, MatrixGraphView } from './Structures';
+import { GraphView, Grid2D, isAdjacencyMatrix, MapView, MatrixGraphView, RecursionTree } from './Structures';
 
 export interface HeaderInfo {
   eyebrow: string;
@@ -18,11 +18,12 @@ interface Props {
   trace: Trace | null;
   stepIndex: number;
   locks: Map<number, LockInfo>;
+  calls: Map<number, CallNode>;
   code?: string;
   present: boolean;
 }
 
-export function Visualizer({ header, trace, stepIndex, locks, code, present }: Props) {
+export function Visualizer({ header, trace, stepIndex, locks, calls, code, present }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
@@ -47,7 +48,7 @@ export function Visualizer({ header, trace, stepIndex, locks, code, present }: P
         </div>
       ) : (
         <>
-          <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} isLast={isLast} />
+          <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} isLast={isLast} />
           <Status step={step} stepIndex={stepIndex} locks={locks} />
           <div className="counters">
             <Counter k="Step" v={`${stepIndex + 1}/${trace!.steps.length}`} />
@@ -75,7 +76,7 @@ function Counter({ k, v }: { k: string; v: string | number }) {
   );
 }
 
-function Stage({ step, prev, stepIndex, locks, isLast }: { step: Step; prev?: Step; stepIndex: number; locks: Map<number, LockInfo>; isLast: boolean }) {
+function Stage({ step, prev, stepIndex, locks, calls, isLast }: { step: Step; prev?: Step; stepIndex: number; locks: Map<number, LockInfo>; calls: Map<number, CallNode>; isLast: boolean }) {
   const { arrays, maps, objects } = structuresFor(step);
   const views = [];
   for (const a of arrays.slice(0, 6)) {
@@ -99,6 +100,8 @@ function Stage({ step, prev, stepIndex, locks, isLast }: { step: Step; prev?: St
   }
   if (objects.roots.length) views.push(<GraphView key="graph" step={step} prev={prev} roots={objects.roots} />);
   for (const m of maps.slice(0, 3)) if (m.item.kind === 'map') views.push(<MapView key={m.id} item={m.item} names={m.names} step={step} />);
+  const rec = recursionRoot(calls, step, stepIndex);
+  if (rec !== null) views.push(<RecursionTree key="rec" nodes={calls} root={rec} step={step} stepIndex={stepIndex} />);
   if (!views.length) {
     return (
       <div className="stage">

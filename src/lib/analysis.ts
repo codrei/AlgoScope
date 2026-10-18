@@ -175,3 +175,60 @@ export function compareOp(text: string): string | null {
   const m = /COMPARE .*?\) (<=|>=|==|!=|<|>) /.exec(text) ?? /COMPARE \S+ (<=|>=|==|!=|<|>) /.exec(text);
   return m ? m[1] : null;
 }
+
+// ---------------------------------------------------------------- recursion tree
+
+export interface CallNode {
+  fid: number;
+  name: string;
+  label: string;
+  parent: number | null;
+  children: number[];
+  start: number;
+  end: number;
+  ret?: string;
+}
+
+/** Every function call in the trace, with its caller, start/end step and return value. */
+export function buildCallTree(trace: Trace): Map<number, CallNode> {
+  const nodes = new Map<number, CallNode>();
+  trace.steps.forEach((s, si) => {
+    const fr = s.frames.filter((f) => f.fid !== 0);
+    fr.forEach((f, i) => {
+      let n = nodes.get(f.fid);
+      if (!n) {
+        const parent = i > 0 ? fr[i - 1].fid : null;
+        const isTop = i === fr.length - 1;
+        const m = isTop && s.kind === 'call' ? /^(?:CALL|NEW) (.*)$/.exec(s.text) : null;
+        n = { fid: f.fid, name: f.name, label: m ? m[1] : `${f.name}()`, parent, children: [], start: si, end: si };
+        nodes.set(f.fid, n);
+        if (parent !== null) nodes.get(parent)?.children.push(f.fid);
+      }
+      n.end = si;
+    });
+    const top = fr[fr.length - 1];
+    if (top && s.kind === 'return') {
+      const m = /^RETURN (.*?)(?: from \S+)?$/.exec(s.text);
+      const n = nodes.get(top.fid);
+      if (n && m && m[1]) n.ret = m[1];
+    }
+  });
+  return nodes;
+}
+
+/** The recursive call tree around the current step (or the last finished one), or null. */
+export function recursionRoot(nodes: Map<number, CallNode>, step: Step, stepIndex: number): number | null {
+  const isRoot = (n: CallNode) => {
+    const parent = n.parent !== null ? nodes.get(n.parent) : undefined;
+    return (!parent || parent.name !== n.name) && n.children.some((c) => nodes.get(c)?.name === n.name);
+  };
+  for (const f of step.frames) {
+    const n = nodes.get(f.fid);
+    if (n && isRoot(n)) return n.fid;
+  }
+  let best: CallNode | null = null;
+  for (const n of nodes.values()) {
+    if (n.start <= stepIndex && isRoot(n) && (!best || n.start > best.start)) best = n;
+  }
+  return best ? best.fid : null;
+}

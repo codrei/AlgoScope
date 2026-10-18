@@ -1,4 +1,5 @@
 import type { HeapArr, HeapItem, HeapMap, HeapObj, SnapVal, Step } from '../engine/trace';
+import type { CallNode } from '../lib/analysis';
 import { cellText, Label, rolesFor } from './ArrayView';
 
 /** 2D arrays / matrices / DP tables / adjacency lists. */
@@ -424,6 +425,87 @@ export function MatrixGraphView({ item, names, step }: { item: HeapArr; names: s
                     {cellText(d)}
                   </text>
                 )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- recursion tree
+
+
+export function RecursionTree({ nodes, root, step, stepIndex }: { nodes: Map<number, CallNode>; root: number; step: Step; stepIndex: number }) {
+  const active = new Set(step.frames.map((f) => f.fid));
+  const topFid = step.frames[step.frames.length - 1]?.fid;
+  // nodes that have started by this step
+  const visible = (fid: number) => (nodes.get(fid)?.start ?? Infinity) <= stepIndex;
+  const pos = new Map<number, { x: number; y: number; w: number }>();
+  let cursor = 10;
+  let maxDepth = 0;
+  let count = 0;
+  const place = (fid: number, depth: number): number => {
+    const n = nodes.get(fid)!;
+    count++;
+    const label = n.label.length > 22 ? n.label.slice(0, 21) + '…' : n.label;
+    const retLen = n.ret !== undefined ? n.ret.length + 3 : 0;
+    const w = Math.max(56, (label.length + retLen) * 7.6 + 18);
+    const kids = n.children.filter(visible);
+    maxDepth = Math.max(maxDepth, depth);
+    let x: number;
+    if (!kids.length || count > 80) {
+      x = cursor + w / 2;
+      cursor += w + 12;
+    } else {
+      const xs = kids.map((c) => place(c, depth + 1));
+      x = Math.max((xs[0] + xs[xs.length - 1]) / 2, cursor - w / 2 - 6);
+      if (x - w / 2 < 10) x = 10 + w / 2;
+      cursor = Math.max(cursor, x + w / 2 + 12);
+    }
+    pos.set(fid, { x, y: 14 + depth * 52, w });
+    return x;
+  };
+  place(root, 0);
+  const width = cursor + 10;
+  const height = 14 + (maxDepth + 1) * 52;
+  const edges: { a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+  pos.forEach((p, fid) => {
+    const n = nodes.get(fid)!;
+    if (n.parent !== null && pos.has(n.parent)) {
+      const q = pos.get(n.parent)!;
+      edges.push({ a: { x: q.x, y: q.y + 30 }, b: { x: p.x, y: p.y } });
+    }
+  });
+  const total = [...pos.keys()].length;
+  return (
+    <div className="struct">
+      <div className="struct-label">
+        <b>recursion tree</b>
+        <span className="kind">calls</span>
+        <span>{total} call{total === 1 ? '' : 's'} so far</span>
+      </div>
+      <div className="graph-wrap">
+        <svg className="graph-svg" width={width} height={height} role="img" aria-label="recursion tree">
+          {edges.map((e, i) => (
+            <line key={i} x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y} stroke="var(--cell-border)" strokeWidth={2} />
+          ))}
+          {[...pos].map(([fid, p]) => {
+            const n = nodes.get(fid)!;
+            const isTop = fid === topFid;
+            const onStack = active.has(fid);
+            const done = !onStack && n.end < stepIndex;
+            const fill = isTop ? 'color-mix(in srgb, var(--nu-gold) 45%, var(--surface))' : onStack ? 'var(--compare-bg)' : done ? 'var(--surface-2)' : 'var(--cell-bg)';
+            const stroke = isTop ? 'var(--nu-gold-deep)' : onStack ? 'var(--compare)' : 'var(--cell-border)';
+            const label = n.label.length > 22 ? n.label.slice(0, 21) + '…' : n.label;
+            return (
+              <g key={fid} transform={`translate(${p.x - p.w / 2},${p.y})`}>
+                <rect width={p.w} height={30} rx={8} fill={fill} stroke={stroke} strokeWidth={isTop ? 3 : 2} />
+                <text x={p.w / 2} y={20} textAnchor="middle" fontSize={12.5} fontWeight={700} fill={done ? 'var(--text-2)' : 'var(--text)'}>
+                  {label}
+                  {done && n.ret !== undefined && <tspan fill="var(--locked)" fontWeight={800}>{` = ${n.ret}`}</tspan>}
+                </text>
               </g>
             );
           })}

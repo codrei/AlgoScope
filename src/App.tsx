@@ -7,7 +7,7 @@ import { Visualizer, type HeaderInfo } from './components/Visualizer';
 import { configureEngine, preload, runCode, type Trace } from './engine';
 import type { Lang } from './engine/ir';
 import { EXAMPLES, type Example } from './examples';
-import { computeLocks, type LockInfo } from './lib/analysis';
+import { buildCallTree, computeLocks, type CallNode, type LockInfo } from './lib/analysis';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -68,6 +68,7 @@ export default function App() {
   const code = codes[lang];
   const stale = !!trace && traceCode !== code;
   const locks = useMemo(() => (trace ? computeLocks(trace) : new Map<number, LockInfo>()), [trace]);
+  const calls = useMemo(() => (trace ? buildCallTree(trace) : new Map<number, CallNode>()), [trace]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -250,7 +251,7 @@ export default function App() {
         )}
         <section className="panel viz" aria-label="Visualization">
           <div className="viz-scroll" style={{ zoom }}>
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} locks={locks} code={traceCode || code} present={present} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} locks={locks} calls={calls} code={traceCode || code} present={present} />
             {trace?.truncated && atEnd && (
               <div className="notice">
                 Stopped after {total.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).

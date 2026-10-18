@@ -7,7 +7,7 @@ export const fibDp: Example = {
   description: 'Bottom-up dynamic programming: fill dp[i] = dp[i−1] + dp[i−2] from left to right so each value is computed only once.',
   time: 'O(n)',
   space: 'O(n)',
-  notes: 'Compare with recursive Fibonacci: O(n) instead of O(2ⁿ).',
+  notes: 'Compare with recursive Fibonacci: O(n) instead of O(2^n).',
   output: 'fib(10) = 55\n',
   code: {
     c: String.raw`#include <stdio.h>

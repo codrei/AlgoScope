@@ -345,7 +345,7 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
         for (const c of kids(f(n, 'body')!)) {
           if (c.type !== 'case_statement') continue;
           const v = f(c, 'value');
-          const bodyNodes = kids(c).filter((k) => k !== v);
+          const bodyNodes = kids(c).filter((k) => !v || k.startIndex !== v.startIndex);
           cases.push({ tests: v ? [expr(v)] : null, body: bodyNodes.flatMap(stmt) });
         }
         return [{ k: 'switch', ln, e, cases }];

@@ -228,8 +228,9 @@ export function lowerCSharp(root: Node): Program {
         const body = f(n, 'body')!;
         for (const sec of kids(body)) {
           if (sec.type !== 'switch_section') continue;
-          const labels = kids(sec).filter((k) => /label|pattern|case/.test(k.type) && !/statement/.test(k.type));
-          const rest = kids(sec).filter((k) => !labels.includes(k));
+          const secKids = kids(sec);
+          const labels = secKids.filter((k) => /label|pattern|case/.test(k.type) && !/statement/.test(k.type));
+          const rest = secKids.filter((k) => !labels.includes(k));
           const isDefault = labels.some((l) => l.text.startsWith('default'));
           const tests = labels.filter((l) => !l.text.startsWith('default')).map((l) => {
             const inner = kids(l)[0] ?? l;

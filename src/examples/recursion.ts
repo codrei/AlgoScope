@@ -93,7 +93,7 @@ export const fibonacci: Example = {
   title: 'Fibonacci (Recursive)',
   topic: 'Recursion',
   description: 'fib(n) = fib(n−1) + fib(n−2). Watch the call stack: the same values are computed again and again.',
-  time: 'O(2ⁿ)',
+  time: 'O(2^n)',
   space: 'O(n)',
   notes: 'Exponential: fib(5) makes 15 calls. Compare with the dynamic programming version.',
   output: 'fib(5) = 5\n',
@@ -186,9 +186,9 @@ export const hanoi: Example = {
   title: 'Tower of Hanoi',
   topic: 'Recursion',
   description: 'Move n disks from A to C: move n−1 disks out of the way to B, move the biggest disk to C, then move the n−1 disks onto it.',
-  time: 'O(2ⁿ)',
+  time: 'O(2^n)',
   space: 'O(n)',
-  notes: 'Needs exactly 2ⁿ − 1 moves: 7 moves for 3 disks.',
+  notes: 'Needs exactly 2^n − 1 moves: 7 moves for 3 disks.',
   output: HANOI_OUT,
   code: {
     c: String.raw`#include <stdio.h>

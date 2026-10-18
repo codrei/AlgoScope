@@ -1697,9 +1697,8 @@ export class Interp {
       case 'char': return new Chr(0);
       case 'string': return this.lang === 'cpp' ? '' : null;
       default:
-        if (this.lang === 'cpp' && isLibraryType(t.base)) return libraryNew(this, t, []);
         if ((this.lang === 'cpp' || this.lang === 'c') && this.classes.has(t.base) && isField) return this.construct(t.base, []);
-        if (this.lang === 'csharp' && this.classes.get(t.base)?.def && false) return null;
+        if (this.lang === 'cpp' && isLibraryType(t.base) && !this.classes.has(t.base)) return libraryNew(this, t, []);
         return null;
     }
   }
@@ -1709,8 +1708,8 @@ export class Interp {
     if (t.ptr) return null;
     if (this.lang === 'cpp' || this.lang === 'c') {
       if (t.base === 'string') return '';
-      if (isLibraryType(t.base)) return libraryNew(this, t, []);
       if (this.classes.has(t.base) && !t.arr) return this.construct(t.base, []);
+      if (isLibraryType(t.base)) return libraryNew(this, t, []);
       if (t.base === 'double') return new Flt(0);
       if (t.base === 'char') return new Chr(0);
       if (t.base === 'bool') return false;
@@ -1732,7 +1731,7 @@ export class Interp {
       p.fields.set('second', this.ev(e.items[1]));
       return p;
     }
-    if (isLibraryType(t.base) && !t.arr) {
+    if (isLibraryType(t.base) && !t.arr && !this.classes.has(t.base)) {
       const lib = libraryNew(this, t, []);
       const inner = t.args?.[0] ?? { base: 'auto', arr: 0, ptr: 0 };
       if (lib instanceof Arr) {
