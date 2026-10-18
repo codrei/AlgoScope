@@ -69,6 +69,8 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [lab, setLab] = useState(P.lab);
   const [zoom, setZoom] = useState(() => load('as.zoom', 1));
+  const [predict, setPredict] = useState(() => load('as.predict', false));
+  const [quiz, setQuiz] = useState<{ step: number; answer?: 'Yes' | 'No' } | null>(null);
   const [keyOnly, setKeyOnly] = useState(() => load('as.keyOnly', true));
   const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
 
@@ -87,6 +89,7 @@ export default function App() {
   useEffect(() => save('as.zoom', zoom), [zoom]);
   useEffect(() => save('as.mode', mode), [mode]);
   useEffect(() => save('as.keyOnly', keyOnly), [keyOnly]);
+  useEffect(() => save('as.predict', predict), [predict]);
   useEffect(() => save('as.example', example.id), [example]);
   useEffect(() => {
     preload(lang).catch(() => undefined);
@@ -146,6 +149,22 @@ export default function App() {
   }, [view, stepIndex]);
   const total = view.length;
 
+  // Predict mode: moving forward onto a comparison asks the class first.
+  const isQuestion = useCallback((i: number) => {
+    const st = trace?.steps[i];
+    return !!st && st.kind === 'compare' && /\? (Yes|No)\b/.test(st.say);
+  }, [trace]);
+  const moveTo = useCallback(
+    (i: number, forward: boolean) => {
+      setStepIndex(i);
+      if (predict && forward && isQuestion(i)) {
+        setQuiz({ step: i });
+        setPlaying(false);
+      }
+    },
+    [predict, isQuestion],
+  );
+
   // playback timer
   useEffect(() => {
     if (!playing || !trace) return;
@@ -153,16 +172,18 @@ export default function App() {
       setPlaying(false);
       return;
     }
-    const t = window.setTimeout(() => setStepIndex(view[pos + 1]), 1000 / speed);
+    const t = window.setTimeout(() => moveTo(view[pos + 1], true), 1000 / speed);
     return () => window.clearTimeout(t);
-  }, [playing, pos, speed, total, trace, view]);
+  }, [playing, pos, speed, total, trace, view, moveTo]);
 
   const goto = useCallback(
     (p: number) => {
       setPlaying(false);
-      if (view.length) setStepIndex(view[Math.max(0, Math.min(p, view.length - 1))]);
+      if (!view.length) return;
+      const target = view[Math.max(0, Math.min(p, view.length - 1))];
+      moveTo(target, p === pos + 1);
     },
-    [view],
+    [view, pos, moveTo],
   );
 
   const togglePlay = useCallback(() => {
@@ -172,8 +193,10 @@ export default function App() {
   }, [trace, playing, pos, total, view]);
 
   // keyboard shortcuts (ignored while typing in the editor or a field)
-  const keyRef = useRef({ goto, togglePlay, pos, total });
-  keyRef.current = { goto, togglePlay, pos, total };
+  const answer = useCallback((a: 'Yes' | 'No') => setQuiz((q) => (q ? { ...q, answer: a } : q)), []);
+  const quizOpen = !!quiz && quiz.step === stepIndex && !quiz.answer;
+  const keyRef = useRef({ goto, togglePlay, pos, total, answer, quizOpen });
+  keyRef.current = { goto, togglePlay, pos, total, answer, quizOpen };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -189,6 +212,8 @@ export default function App() {
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         k.goto(k.pos - 1);
+      } else if ((e.key === 'y' || e.key === 'n') && k.quizOpen) {
+        k.answer(e.key === 'y' ? 'Yes' : 'No');
       } else if (e.key === 'Home') k.goto(0);
       else if (e.key === 'End') k.goto(k.total - 1);
     };
@@ -275,14 +300,14 @@ export default function App() {
         )}
         <section className="panel viz" aria-label="Visualization">
           <div className="viz-scroll" style={{ zoom }}>
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
             {trace?.truncated && atEnd && (
               <div className="notice">
                 Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).
               </div>
             )}
           </div>
-          <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} />
+          <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />
         </section>
       </main>
       {help && <HelpDialog onClose={() => setHelp(false)} />}

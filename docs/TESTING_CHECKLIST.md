@@ -49,9 +49,10 @@ That's how we find unsupported features before the professor does.
 3. **Same algorithm, other language (30 s):** switch to Python or Java and Run. The engine supports C, C++, Java, C# and Python.
 4. **Data structures (1 min):** Linked List: stop during `reverse` and point at prev / cur / next. Then BST.
 5. **Recursion and DP (1 min):** recursive Fibonacci (recursion tree, 15 calls), then Fibonacci DP table.
-6. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
+6. **Predict (30 s):** turn on Predict, let the audience guess one comparison, answer with Y / N.
+7. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
    comparing all sorts.
-7. **Own code (30 s):** type a small program live (for example a loop that sums an array) and Run.
+8. **Own code (30 s):** type a small program live (for example a loop that sums an array) and Run.
 
 ## Likely questions
 
@@ -62,5 +63,5 @@ That's how we find unsupported features before the professor does.
 - **How does it know when something is a swap?** When two elements of the same array exchange values within a
   few steps, the engine marks it as a swap. That works whether the code uses a temp variable, `swap()`, or Python's `a, b = b, a`.
 - **Does it work without internet?** Yes, after the first visit the browser keeps a copy of the app.
-- **How do you know it's correct?** 166 engine tests and 12 click-through interface tests run every example in every language, plus classroom-style
+- **How do you know it's correct?** 166 engine tests and 14 click-through interface tests run every example in every language, plus classroom-style
   programs, before each update is published.

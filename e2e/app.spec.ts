@@ -139,3 +139,28 @@ test('works offline after the first visit', async ({ browser }) => {
   await expect(page.locator('.console')).toHaveText('Sorted: 1 2 3 4 5 8');
   await context.close();
 });
+
+test('predict mode asks before each comparison and checks the answer', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&lang=cpp&run=1&step=0');
+  await page.getByRole('button', { name: /Predict/ }).click();
+  // step forward until a question appears
+  for (let i = 0; i < 10 && !(await page.locator('.step-card.quiz').count()); i++) {
+    await page.getByRole('button', { name: 'Next step' }).click();
+  }
+  await expect(page.locator('.step-card.quiz .step-say')).toHaveText('Is arr[0] = 5 greater than arr[1] = 1?');
+  await page.keyboard.press('y');
+  await expect(page.locator('.quiz-verdict')).toHaveText('✓ Correct!');
+  await expect(page.locator('.step-say')).toContainText('Yes, so the code inside the if runs');
+  // the next comparison asks again; a wrong answer is explained
+  for (let i = 0; i < 10 && !(await page.locator('.step-card.quiz').count()); i++) {
+    await page.getByRole('button', { name: 'Next step' }).click();
+  }
+  await page.getByRole('button', { name: /^No/ }).click();
+  await expect(page.locator('.quiz-verdict')).toContainText('Not this time');
+});
+
+test('playback controls fit on one row on a 1366px laptop', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&run=1&step=0');
+  const h = await page.locator('.playback').evaluate((e) => e.getBoundingClientRect().height);
+  expect(h).toBeLessThan(80);
+});

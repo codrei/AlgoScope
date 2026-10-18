@@ -38,6 +38,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Key steps</b> (the default) stops only where something happens: compares, swaps, changes, pointers moving, calls and output. Bubble Sort takes 28 key steps instead of 84 lines.</li>
           <li><b>Every line</b> stops on every line that runs, including loop counters and temporary variables.</li>
         </ul>
+        <h3>Predict mode</h3>
+        <ul>
+          <li>Turn on <b>Predict</b> in the playback bar to pause before every comparison and let the class guess. Answer with <b>Yes</b> / <b>No</b> or the <kbd>Y</kbd> / <kbd>N</kbd> keys.</li>
+        </ul>
         <h3>What the colors mean</h3>
         <div className="legend">
           <span><i className="compare" /> compared</span>

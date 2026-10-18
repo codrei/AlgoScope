@@ -30,6 +30,12 @@ Two switches control how much the class sees.
 
 The explanation box stays pinned at the bottom of the panel, so it is visible even on small laptop screens.
 
+## Predict mode (for class discussion)
+
+Turn on **Predict** in the playback bar. Before every comparison the animation stops and asks the class, for
+example *"Is arr[1] = 1 less than arr[0] = 5?"*. Let students answer, then click **Yes** / **No** (or press **Y** / **N**).
+AlgoScope shows **✓ Correct!** or **✗ Not this time** and reveals the step. Press Play or Next to continue.
+
 ## Offline use
 
 After AlgoScope has been opened once (with internet), it keeps a copy in the browser. It opens and runs all five

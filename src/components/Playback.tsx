@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronLeft, ChevronRight, HelpCircle, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 
 export const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4, 8];
 
@@ -12,9 +12,11 @@ interface Props {
   onSpeed: (s: number) => void;
   keyOnly: boolean;
   onKeyOnly: (v: boolean) => void;
+  predict: boolean;
+  onPredict: (v: boolean) => void;
 }
 
-export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpeed, keyOnly, onKeyOnly }: Props) {
+export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpeed, keyOnly, onKeyOnly, predict, onPredict }: Props) {
   const disabled = total === 0;
   const atEnd = index >= total - 1;
   return (
@@ -53,6 +55,14 @@ export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpee
           Every line
         </button>
       </div>
+      <button
+        className={`predict-btn ${predict ? 'active' : ''}`}
+        onClick={() => onPredict(!predict)}
+        aria-pressed={predict}
+        title="Predict mode: pause before each comparison so the class can guess the answer"
+      >
+        <HelpCircle size={15} /> Predict
+      </button>
       <select className="speed" value={speed} onChange={(e) => onSpeed(Number(e.target.value))} aria-label="Speed" title="Playback speed">
         {SPEEDS.map((s) => (
           <option key={s} value={s}>{s}×</option>

@@ -23,6 +23,8 @@ interface Props {
   position: number;
   viewTotal: number;
   caption: string | null;
+  quiz: { step: number; answer?: 'Yes' | 'No' } | null;
+  onAnswer: (a: 'Yes' | 'No') => void;
   locks: Map<number, LockInfo>;
   calls: Map<number, CallNode>;
   importance: Map<number, number>;
@@ -32,7 +34,7 @@ interface Props {
   present: boolean;
 }
 
-export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, locks, calls, importance, mode, onMode, code, present }: Props) {
+export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, quiz, onAnswer, locks, calls, importance, mode, onMode, code, present }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
@@ -70,7 +72,7 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
         <div className="present-grid">
           <div className="present-main">
             <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-            <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} locks={locks} />
+            <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />
             <VarChips step={step} prev={prev} />
             <OutputBox trace={trace!} step={step} compact />
           </div>
@@ -81,7 +83,7 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
       ) : (
         <>
           <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-          <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} locks={locks} />
+          <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />
           {beginner ? (
             <>
               <VarChips step={step} prev={prev} />
@@ -240,8 +242,36 @@ function Legend({ step, arrays, locks, stepIndex, isLast }: { step: Step; arrays
   );
 }
 
-function StepCard({ step, stepIndex, position, total, caption, locks }: { step: Step; stepIndex: number; position: number; total: number; caption: string | null; locks: Map<number, LockInfo> }) {
+function StepCard(p: {
+  step: Step;
+  stepIndex: number;
+  position: number;
+  total: number;
+  caption: string | null;
+  quiz: { step: number; answer?: 'Yes' | 'No' } | null;
+  onAnswer: (a: 'Yes' | 'No') => void;
+  locks: Map<number, LockInfo>;
+}) {
+  const { step, stepIndex, position, total, caption, quiz, onAnswer, locks } = p;
   const [showCode, setShowCode] = useState(false);
+  const m = /^(.*?\?) (Yes|No)\b/.exec(step.say);
+  if (quiz && m && !quiz.answer) {
+    return (
+      <div className="step-card quiz" role="status" aria-live="polite">
+        <div className="step-card-top">
+          <span className="step-label">Predict</span>
+          <span className="step-num">Step {position + 1} of {total}</span>
+        </div>
+        {caption && <p className="step-caption">{caption}</p>}
+        <p className="step-say">{m[1]}</p>
+        <div className="quiz-buttons">
+          <button className="quiz-btn" onClick={() => onAnswer('Yes')}>Yes <kbd>Y</kbd></button>
+          <button className="quiz-btn" onClick={() => onAnswer('No')}>No <kbd>N</kbd></button>
+        </div>
+      </div>
+    );
+  }
+  const verdict = quiz?.answer && m ? (quiz.answer === m[2] ? 'right' : 'wrong') : null;
   const notes: string[] = [];
   for (const [id, info] of locks) {
     const h = step.heap[id];
@@ -257,6 +287,9 @@ function StepCard({ step, stepIndex, position, total, caption, locks }: { step: 
         <span className="step-num">Step {position + 1} of {total}</span>
       </div>
       {caption && <p className="step-caption">{caption}</p>}
+      {verdict && (
+        <p className={`quiz-verdict ${verdict}`}>{verdict === 'right' ? '✓ Correct!' : `✗ Not this time: the answer is ${m![2]}.`}</p>
+      )}
       <p className="step-say">{step.say}</p>
       {notes.length > 0 && step.kind !== 'end' && (
         <p className="step-lock">{notes.join(', ')} {notes.length > 1 ? 'are' : 'is'} now in the final sorted place.</p>
