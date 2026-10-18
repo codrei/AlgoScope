@@ -93,4 +93,6 @@ export interface Trace {
   error?: { msg: string; line: number };
   /** the program was stopped at the step limit */
   truncated?: boolean;
+  /** totals from a counts-only run */
+  finalCounts?: Counts & { steps: number };
 }

@@ -13,6 +13,8 @@ export interface RunOptions {
   maxSteps?: number;
   maxDepth?: number;
   stdin?: string;
+  /** only count operations (no snapshots): used by the Complexity Lab */
+  countsOnly?: boolean;
 }
 
 export class RuntimeErr extends Error {
@@ -142,6 +144,8 @@ export class Interp {
   maxDepth: number;
   stdin: string;
   stdinPos = 0;
+  countsOnly: boolean;
+  stepCount = 0;
   cout: StreamState = { fixed: false, precision: 6, width: 0, boolalpha: false };
   private heapCache = new Map<number, { ver: number; item: HeapItem }>();
   private globalIndexVars: Record<string, string[]>;
@@ -154,6 +158,7 @@ export class Interp {
     this.maxSteps = opts.maxSteps ?? 5000;
     this.maxDepth = opts.maxDepth ?? 200;
     this.stdin = opts.stdin ?? '';
+    this.countsOnly = !!opts.countsOnly;
     this.global = new Frame('Global');
     for (const [name, def] of Object.entries(prog.classes)) this.classes.set(name, { def, statics: new Map() });
     this.globalIndexVars = collectIndexVars(prog.globals);
@@ -222,6 +227,7 @@ export class Interp {
       }
     }
     trace.stdout = this.out;
+    if (this.countsOnly) trace.finalCounts = { ...this.counts, steps: this.stepCount };
     return trace;
   }
 
@@ -251,6 +257,15 @@ export class Interp {
       else if (cond) text = `CHECK ${condSrc} → ${result} · COMPARE ${this.compareText}`;
       else text = `${text} · COMPARE ${this.compareText}`;
       kind = 'compare';
+    }
+    if (this.countsOnly) {
+      this.stepCount++;
+      this.touches = [];
+      this.compareText = undefined;
+      this.compareExpr = undefined;
+      this.swapText = undefined;
+      if (this.stepCount >= this.maxSteps) throw new StepLimit();
+      return;
     }
     this.pushStep(ln, kind, text);
     if (this.steps.length >= this.maxSteps) throw new StepLimit();
@@ -1329,7 +1344,7 @@ export class Interp {
     this.counts.writes++;
     this.touches.push({ id: arr.id, idx, role: 'write' });
     const lw = arr.lastWrite;
-    const stepNo = this.steps.length;
+    const stepNo = this.countsOnly ? this.stepCount : this.steps.length;
     if (
       lw && lw.idx !== idx && stepNo - lw.step <= 3 && !valEq(old, v) &&
       valEq(lw.neu, old) && valEq(v, lw.old) && valEq(arr.items[lw.idx], lw.neu)

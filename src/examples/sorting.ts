@@ -52,7 +52,7 @@ void bubbleSort(int arr[], int n) {
 
 int main() {
     int arr[] = {5, 1, 4, 2, 8, 3};
-    int n = 6;
+    int n = sizeof(arr) / sizeof(arr[0]);
     bubbleSort(arr, n);
     cout << "Sorted:";
     for (int i = 0; i < n; i++) {
@@ -146,7 +146,7 @@ const mainC = (call: string) => String.raw`int main() {
 
 const mainCpp = (call: string) => String.raw`int main() {
     int arr[] = {5, 1, 4, 2, 8, 3};
-    int n = 6;
+    int n = sizeof(arr) / sizeof(arr[0]);
     ${call};
     cout << "Sorted:";
     for (int i = 0; i < n; i++) {

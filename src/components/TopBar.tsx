@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Sun } from 'lucide-react';
+import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Sun, TrendingUp } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
 
@@ -23,6 +23,7 @@ interface Props {
   dark: boolean;
   onDark: () => void;
   onHelp: () => void;
+  onLab: () => void;
   onZoom: (d: number) => void;
 }
 
@@ -85,6 +86,9 @@ export function TopBar(p: Props) {
           </div>
         )}
       </div>
+      <button className="topbar-btn" onClick={p.onLab} title="Complexity Lab: measure how the work grows with the input size">
+        <TrendingUp size={16} /> <span className="label">Complexity</span>
+      </button>
       <div className="topbar-spacer" />
       <button className="topbar-btn" onClick={() => p.onZoom(-1)} title="Smaller text" aria-label="Smaller text"><Minus size={16} /></button>
       <button className="topbar-btn" onClick={() => p.onZoom(1)} title="Bigger text (for projectors)" aria-label="Bigger text"><Plus size={16} /></button>

@@ -48,7 +48,7 @@ int linearSearch(int arr[], int n, int target) {
 
 int main() {
     int arr[] = {10, 25, 3, 47, 18, 32};
-    int n = 6;
+    int n = sizeof(arr) / sizeof(arr[0]);
     int target = 18;
     int index = linearSearch(arr, n, target);
     if (index != -1) {
@@ -185,7 +185,7 @@ int binarySearch(int arr[], int n, int target) {
 
 int main() {
     int arr[] = {2, 5, 8, 12, 16, 23, 38, 56, 72, 91};
-    int n = 10;
+    int n = sizeof(arr) / sizeof(arr[0]);
     int target = 23;
     int index = binarySearch(arr, n, target);
     if (index != -1) {

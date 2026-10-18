@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorPane } from './components/EditorPane';
+import { ComplexityLab } from './components/ComplexityLab';
+import { LANGS } from './components/EditorPane';
 import { HelpDialog } from './components/HelpDialog';
 import { Playback } from './components/Playback';
 import { TopBar } from './components/TopBar';
@@ -43,6 +45,7 @@ const P = {
   step: params.get('step') ? Number(params.get('step')) : null,
   present: params.get('present') === '1',
   theme: params.get('theme'),
+  lab: params.get('lab') === '1',
 };
 
 export default function App() {
@@ -63,6 +66,7 @@ export default function App() {
   const [dark, setDark] = useState(() => (P.theme ? P.theme === 'dark' : load('as.dark', false)));
   const [present, setPresent] = useState(P.present);
   const [help, setHelp] = useState(false);
+  const [lab, setLab] = useState(P.lab);
   const [zoom, setZoom] = useState(() => load('as.zoom', 1));
 
   const code = codes[lang];
@@ -219,6 +223,7 @@ export default function App() {
         dark={dark}
         onDark={() => setDark(!dark)}
         onHelp={() => setHelp(true)}
+        onLab={() => setLab(true)}
         onZoom={(d) => setZoom((z: number) => Math.min(1.8, Math.max(0.7, Math.round((z + d * 0.1) * 10) / 10)))}
       />
       <main className={`main ${present ? 'present' : ''}`}>
@@ -262,6 +267,7 @@ export default function App() {
         </section>
       </main>
       {help && <HelpDialog onClose={() => setHelp(false)} />}
+      {lab && <ComplexityLab example={example} lang={lang} langLabel={LANGS.find((l) => l.id === lang)!.label} onClose={() => setLab(false)} />}
     </div>
   );
 }
