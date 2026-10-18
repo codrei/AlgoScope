@@ -1,0 +1,98 @@
+# AlgoScope User Guide
+
+**Open it:** https://codrei.github.io/AlgoScope/ (works in Chrome, Edge and Firefox; nothing to install).
+
+AlgoScope runs a C, C++, Java, C# or Python program one line at a time and shows what each line does.
+It is meant for teaching **Data Structures & Algorithms** and **Algorithms & Complexity**.
+
+## 1. The screen
+
+| Area | What it shows |
+|---|---|
+| **Top bar** | Examples menu, Complexity Lab, text size (− / +), Present mode, light/dark theme, Help |
+| **Editor (left)** | Language tabs, Reset, **Run**. The line that just ran is highlighted in gold. |
+| **Visualization (right)** | Algorithm name and Big-O badges, the picture of the data, the step explanation, counters, call stack and output |
+| **Playback bar (bottom right)** | first / back / play-pause / forward / last, a slider to jump to any step, and the speed |
+
+## 2. Running an algorithm
+
+1. Open **Examples** and pick an algorithm. Every example exists in all five languages, so switch
+   the language tab to show the same algorithm in C, C++, Java, C# or Python.
+2. Press **Run** (or **Ctrl + Enter**). The animation starts by itself.
+3. Pause with **Space**, then step with **←** and **→** while you explain each line.
+   **Home** / **End** jump to the first / last step.
+
+The sentence under the picture explains every step, for example:
+
+- `COMPARE arr[0] (5) > arr[1] (1) → true`
+- `SWAP arr[0] ↔ arr[1]`
+- `CALL mergeSort(arr, 0, 2)` / `RETURN 3 from fib`
+- `CHECK j < n - i - 1 → false · exit loop`
+
+## 3. What the pictures mean
+
+| Color / mark | Meaning |
+|---|---|
+| Blue outline + bracket with `>` | the two values being compared |
+| Red, with a hop animation | the two values that were just swapped |
+| Yellow | a value that was just changed |
+| Green | the value is in its final sorted place (it will not be touched again) |
+| Yellow tags under cells (`i`, `j`, `mid`, `low`…) | which index each variable points to |
+| Faded cells | outside the current range (`left..right`, `low..high`) |
+
+Depending on the code, AlgoScope also draws:
+
+- **2D arrays** as tables (DP tables fill cell by cell)
+- **adjacency matrices** as a graph (visited vertices in green, current vertex ringed in gold, edge being checked highlighted, distances under each vertex)
+- **linked lists and trees** as nodes with arrows, with pointer variables (`head`, `cur`, `prev`, `root`) labelled
+- **stacks** as a vertical column with the top marked, **queues** with front and rear
+- **hash maps / dictionaries** as key–value tables
+- the **recursion tree** for recursive functions, with each call's return value
+
+## 4. Teaching complexity
+
+- The counters (**comparisons, swaps, function calls**) update with every step.
+- **Complexity Lab** (top bar) reruns the current sorting or searching example on 8, 16, 32 and 64 elements
+  (random, sorted and reversed input) and plots the counts against the shape of its Big-O. It also compares
+  all sorting algorithms on the same input.
+- Good classroom pairs: recursive Fibonacci vs. Fibonacci (DP table); Bubble vs. Merge Sort in the
+  Complexity Lab; Linear vs. Binary Search.
+
+## 5. Using your own code
+
+Type or paste a program into the editor and press **Run**. It needs a normal entry point:
+`main()` in C, C++, Java and C#, or top-level code in Python. If the program reads input (`cin`, `scanf`,
+`Scanner`, `Console.ReadLine`, `input()`), open **Input (stdin)** under the editor and type the values.
+
+**Supported:** variables, arithmetic, if/else, switch, for/while/do-while, break/continue, functions,
+recursion, 1D and 2D arrays, strings, structs and classes (constructors, methods, inheritance), C pointers
+and `malloc`, C++ references, and the usual collections: `vector`, `stack`, `queue`, `priority_queue`, `map`,
+`set`, `ArrayList`, `LinkedList`, `HashMap`, `HashSet`, `Stack`, `List`, `Dictionary`, `Queue`, Python lists,
+dicts, sets, tuples and `deque`.
+
+**Not supported:** templates/generics that you define yourself, exceptions (`try/catch` runs only the `try`
+part), threads, files, lambdas in Java/C#/C++, and most of the standard library beyond the collections above.
+When something is not supported, AlgoScope says which line.
+
+**Limits:** a run stops after 5,000 steps so the animation stays readable. Use small inputs (about 5–10
+elements) for animations, and the Complexity Lab for bigger sizes.
+
+## 6. In the classroom
+
+- **Present** hides the editor and shows the picture large with the code underneath, like the lecture videos.
+- **+ / −** enlarge or shrink the code and the picture for the projector.
+- The **moon / sun** button switches to a dark theme, which often looks better on projectors.
+- **Shareable links**: add options to the address to open a specific state, for example
+  `https://codrei.github.io/AlgoScope/?example=merge-sort&lang=java&run=1&present=1`
+  (`example`, `lang` = c / cpp / java / csharp / python, `run=1`, `step=40`, `present=1`, `theme=dark`, `lab=1`).
+
+## Example list
+
+| Topic | Examples |
+|---|---|
+| Sorting | Bubble, Selection, Insertion, Merge, Quick Sort |
+| Searching | Linear Search, Binary Search |
+| Recursion | Factorial, Fibonacci (recursive), Tower of Hanoi |
+| Data Structures | Stack (array), Queue (circular array), Balanced Parentheses, Linked List (insert & reverse), Binary Search Tree |
+| Dynamic Programming | Fibonacci (DP table), 0/1 Knapsack, Longest Common Subsequence |
+| Graphs | BFS, DFS, Dijkstra's Shortest Path |

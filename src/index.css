@@ -118,6 +118,7 @@ input {
 }
 
 .topbar {
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -1311,7 +1312,7 @@ input {
 /* ---------- responsive ---------- */
 @media (max-width: 980px) {
   .main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: minmax(440px, auto);
     overflow: auto;
   }
@@ -1337,6 +1338,22 @@ input {
 @media (max-width: 560px) {
   .main {
     padding: 8px;
+  }
+
+  .topbar .hide-sm {
+    display: none;
+  }
+
+  .brand-name {
+    font-size: 17px;
+  }
+
+  .viz-scroll {
+    padding: 14px 12px 10px;
+  }
+
+  .step-count {
+    min-width: 0;
   }
 
   .counters {

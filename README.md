@@ -6,6 +6,8 @@ pictures of arrays, stacks, queues, linked lists, trees, hash maps and DP tables
 
 It is built for teaching **Data Structures & Algorithms** and **Algorithms & Complexity**.
 
+**Live:** https://codrei.github.io/AlgoScope/ · [User guide](docs/USER_GUIDE.md) · [Testing checklist & demo script](docs/TESTING_CHECKLIST.md)
+
 ## Features
 
 - Code editor with syntax highlighting for all five languages
@@ -13,6 +15,8 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 - Narration of every step: `COMPARE arr[0] (5) > arr[1] (1) → true`, `SWAP arr[0] ↔ arr[1]`, `CALL fib(3)`...
 - Array cells light up when compared, swapped or changed; elements turn green once they are locked in place
 - Counters for comparisons, swaps and function calls, to compare algorithms' complexity in practice
+- Complexity Lab: reruns an algorithm on growing inputs and plots the counts against its Big-O
+- Recursion tree, graph drawing for adjacency matrices, linked lists and trees as nodes and arrows
 - Built-in example library: every algorithm in all five languages
 - Present mode for projectors, dark/light theme, adjustable text size
 - Runs fully in the browser, so no server and no installation are needed
