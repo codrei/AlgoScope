@@ -87,9 +87,30 @@ Depending on the code, AlgoScope also draws:
 
 ## 5. Using your own code
 
-Type or paste a program into the editor and press **Run**. It needs a normal entry point:
-`main()` in C, C++, Java and C#, or top-level code in Python. If the program reads input (`cin`, `scanf`,
+Type or paste a program into the editor and press **Run**. If the program reads input (`cin`, `scanf`,
 `Scanner`, `Console.ReadLine`, `input()`), open **Input (stdin)** under the editor and type the values.
+
+**Code from the slides.** Lecture slides often show code that a modern compiler rejects. AlgoScope runs it anyway
+and shows a yellow note saying what it adjusted:
+
+- curly quotes (`“%d”`) and long dashes copied from a PDF
+- old C with no return type (`main()`, `factorial(int n)`)
+- Turbo C++ (`#include <iostream.h>`, `<conio.h>`, `void main()`) and Dev-C++ (`system("pause")`)
+- Python 2 `print x`
+- the textbook `IO.readInt()` class in Java
+
+**Only a function, no `main()`?** Press **Add a main() for me** (or **Add a call for me** in Python). AlgoScope adds
+a small `main()` that calls the function with sample values (the array `5 1 4 2 8 3`, sorted first for search
+functions) and prints the result, then runs it.
+
+**Console programs (Turbo C).** `clrscr`, `gotoxy`, `cprintf`/`cputs` and `cout` draw on a **Screen (console)** box
+under the picture, and the screen changes are key steps. `getch()` reads one key from **Input (stdin)**, where you
+can write arrow keys and other special keys as `<up> <down> <left> <right> <enter> <esc>`. Colors (`textcolor`) are
+ignored.
+
+**Structs that hold an array**, like the lessons' `STACK` with `items[]` and `top` or `QUEUE` with `front` and
+`rear`, are drawn as the array with `top` / `front` / `rear` marked, and the slots outside the stack or queue are
+greyed out. In heap sort the array is also drawn as a tree.
 
 **Supported:** variables, arithmetic, if/else, switch, for/while/do-while, break/continue, functions,
 recursion, 1D and 2D arrays, strings (including changing C++ strings in place), structs and classes (constructors,
@@ -124,6 +145,7 @@ elements) for animations, and the Complexity Lab for bigger sizes.
 
 | Topic | Examples |
 |---|---|
+| From the lessons | Lesson 5 Linked List class (C++), Lesson 6 Stack and Queue / circular queue structs (C), Week 5 linear & binary search, Week 6-7 selection / insertion / bubble and quick sort (Python), Week 8 heap sort and insertion sort (Java), Week 9 recursion & factorial, SMOLMAZE Turbo C++ maze game |
 | Sorting | Bubble, Selection, Insertion, Merge, Quick Sort |
 | Searching | Linear Search, Binary Search |
 | Recursion | Factorial, Fibonacci (recursive), Tower of Hanoi |

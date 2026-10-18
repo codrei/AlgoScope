@@ -16,6 +16,7 @@ export const SIZES = [8, 16, 32, 64];
 
 /** Which examples the lab can resize, and how. */
 export function labKind(ex: Example): 'sort' | 'linear' | 'binary' | null {
+  if (ex.only) return null;
   if (ex.topic === 'Sorting') return 'sort';
   if (ex.id === 'linear-search') return 'linear';
   if (ex.id === 'binary-search') return 'binary';
@@ -77,7 +78,9 @@ export async function measure(ex: Example, lang: Lang, c: CaseKind, sizes = SIZE
   if (!kind) return [];
   const res: Measurement[] = [];
   for (const n of sizes) {
-    const code = resizeCode(ex.code[lang], inputFor(kind, n, c));
+    const src = ex.code[lang];
+    if (src === undefined) break;
+    const code = resizeCode(src, inputFor(kind, n, c));
     if (!code) break;
     const r = await runCode(lang, code, { countsOnly: true, maxSteps: 400000, maxDepth: 400 });
     const fc = r.trace?.finalCounts;

@@ -2,7 +2,7 @@ import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Sun, Tre
 import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
 
-const TOPICS: Topic[] = ['Sorting', 'Searching', 'Recursion', 'Data Structures', 'Dynamic Programming', 'Graphs'];
+const TOPICS: Topic[] = ['From the lessons', 'Sorting', 'Searching', 'Recursion', 'Data Structures', 'Dynamic Programming', 'Graphs'];
 
 export function BrandMark() {
   return (

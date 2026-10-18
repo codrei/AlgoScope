@@ -17,7 +17,10 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 - Counters for comparisons, swaps and function calls, to compare algorithms' complexity in practice
 - Complexity Lab: reruns an algorithm on growing inputs and plots the counts against its Big-O
 - Recursion tree, graph drawing for adjacency matrices, linked lists and trees as nodes and arrows
-- Built-in example library: every algorithm in all five languages
+- Built-in example library: every algorithm in all five languages, plus the programs from the course lessons
+- Runs code as it appears on lecture slides (K&R C, Turbo C++ with `conio.h`, curly quotes, Python 2 print) and
+  adds a `main()` for slides that show only a function
+- Console screen for Turbo C programs (`gotoxy`, `getch` with arrow keys)
 - Present mode for projectors, dark/light theme, adjustable text size
 - Runs fully in the browser, so no server and no installation are needed
 

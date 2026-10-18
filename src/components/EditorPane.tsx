@@ -27,6 +27,10 @@ interface Props {
   errorLine: number | null;
   error: string | null;
   stale: boolean;
+  notices?: string[];
+  /** generated code with a main() that calls the user's function */
+  suggestion?: { code: string; calls: string } | null;
+  onUseSuggestion?: () => void;
   stdin: string;
   onStdin: (s: string) => void;
   dark: boolean;
@@ -126,8 +130,17 @@ export function EditorPane(p: Props) {
           }}
         />
       </div>
+      {p.notices?.map((n) => <div className="run-notice" key={n}>{n}</div>)}
       {p.stale && !p.error && <div className="stale-note">The code changed. Press <b>Run</b> to visualize the new version.</div>}
-      {p.error && (
+      {p.suggestion && (
+        <div className="suggest-bar">
+          <span>
+            {p.error ? 'This code has no main(), so nothing runs yet.' : 'This code only defines functions and never calls them.'} AlgoScope can add a {p.error ? 'main()' : 'call'} that tries <b>{p.suggestion.calls}()</b> with sample values.
+          </span>
+          <button className="run-btn small" onClick={p.onUseSuggestion}>{p.error ? 'Add a main() for me' : 'Add a call for me'}</button>
+        </div>
+      )}
+      {p.error && !p.suggestion && (
         <div className="compile-error" role="alert">
           <AlertTriangle size={17} style={{ flexShrink: 0, marginTop: 2, color: 'var(--error)' }} />
           <div>
@@ -145,7 +158,7 @@ export function EditorPane(p: Props) {
             className="stdin-box"
             value={p.stdin}
             onChange={(e) => p.onStdin(e.target.value)}
-            placeholder="Values your program reads with cin / scanf / Scanner / Console.ReadLine / input(), separated by spaces or new lines"
+            placeholder="Values your program reads (cin, scanf, Scanner, Console.ReadLine, input()), separated by spaces or new lines. For getch() keys type <up> <down> <left> <right> <esc> or plain letters."
             spellCheck={false}
           />
         )}

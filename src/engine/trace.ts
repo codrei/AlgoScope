@@ -13,6 +13,8 @@ export interface HeapArr {
   id: number;
   arrKind: ArrKind;
   items: SnapVal[];
+  /** used as a binary heap (priority queue or Python heapq) */
+  heap?: boolean;
 }
 
 export interface HeapObj {
@@ -80,6 +82,8 @@ export interface Step {
   text: string;
   /** the same step explained in plain English for beginners */
   say: string;
+  /** Turbo C console screen (after clrscr/gotoxy), one string per row */
+  screen?: string[];
   frames: FrameSnap[];
   heap: Record<number, HeapItem>;
   /** length of the program output at this step */

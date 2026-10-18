@@ -52,7 +52,8 @@ That's how we find unsupported features before the professor does.
 6. **Predict (30 s):** turn on Predict, let the audience guess one comparison, answer with Y / N.
 7. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
    comparing all sorts.
-8. **Own code (30 s):** type a small program live (for example a loop that sums an array) and Run.
+8. **Own code (30 s):** paste a function from a slide (no `main()`), Run, then press **Add a main() for me**.
+9. **The lessons (30 s):** Examples → From the lessons → Lesson 6 Stack, then SMOLMAZE to show the console screen.
 
 ## Likely questions
 
@@ -63,6 +64,7 @@ That's how we find unsupported features before the professor does.
 - **How does it know when something is a swap?** When two elements of the same array exchange values within a
   few steps, the engine marks it as a swap. That works whether the code uses a temp variable, `swap()`, or Python's `a, b = b, a`.
 - **Does it work without internet?** Yes, after the first visit the browser keeps a copy of the app.
-- **How do you know it's correct?** 45 typical lecture programs print exactly what the real compilers (gcc, g++,
-  javac, .NET, CPython) print, plus 166 engine tests and 14 click-through interface tests run every example in every language, plus classroom-style
-  programs, before each update is published.
+- **How do you know it's correct?** 45 typical lecture programs and 12 programs from the course
+  lessons print exactly what the real compilers (gcc, g++, javac, .NET, CPython) print. Together with the engine
+  tests (244 in all) and 17 click-through interface tests, they run on every example in every language before each
+  update is published.

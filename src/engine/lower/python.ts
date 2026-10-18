@@ -128,6 +128,13 @@ export function lowerPython(root: Node): Program {
       }
       case 'pass_statement':
         return [{ k: 'pass', ln }];
+      case 'print_statement': {
+        // Python 2: print x, y
+        const args = fields(n, 'argument').map(expr);
+        const trailingComma = /,\s*$/.test(n.text);
+        if (trailingComma) args.push({ k: 'kw', ln, name: 'end', value: { k: 'str', ln, v: ' ' } });
+        return [{ k: 'expr', ln, e: { k: 'call', ln, callee: { k: 'name', ln, name: 'print' }, args } }];
+      }
       case 'break_statement':
         return [{ k: 'break', ln }];
       case 'continue_statement':

@@ -19,8 +19,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>1. Write or pick code</h3>
         <ul>
           <li>Choose a language tab above the editor.</li>
-          <li>Open <b>Examples</b> for ready-made sorting, searching, recursion, data structure, dynamic programming and graph algorithms. Every example exists in all five languages.</li>
-          <li>Or type / paste your own program. It needs a normal entry point: <code>main()</code> in C/C++/Java/C#, or top-level code in Python.</li>
+          <li>Open <b>Examples</b> for ready-made sorting, searching, recursion, data structure, dynamic programming and graph algorithms in all five languages. <b>From the lessons</b> holds the programs from the course slides, in the language the slide used.</li>
+          <li>Or type / paste your own program. If it has no <code>main()</code> (like a function copied from a slide), press <b>Add a main() for me</b> and AlgoScope calls it with sample values.</li>
+          <li>Code pasted from slides runs as written: curly quotes, <code>main()</code> without <code>int</code>, Turbo C++ headers and <code>void main</code>, and Python 2 <code>print x</code>. A yellow note says what was adjusted.</li>
         </ul>
         <h3>2. Run and step through</h3>
         <ul>
@@ -66,7 +67,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           collections: <code>vector</code>, <code>stack</code>, <code>queue</code>, <code>priority_queue</code>,{' '}
           <code>map</code>, <code>ArrayList</code>, <code>HashMap</code>, <code>PriorityQueue</code>, <code>List</code>,{' '}
           <code>Dictionary</code>, Python lists, dicts, sets, <code>deque</code>, <code>heapq</code> and{' '}
-          <code>@lru_cache</code>.
+          <code>@lru_cache</code>. Turbo C console programs work too: <code>clrscr</code>, <code>gotoxy</code> and{' '}
+          <code>cprintf</code> draw on a <b>Screen (console)</b> box, and <code>getch()</code> reads keys typed in{' '}
+          <b>Input (stdin)</b> as <code>&lt;up&gt; &lt;down&gt; &lt;left&gt; &lt;right&gt; &lt;enter&gt; &lt;esc&gt;</code>.
         </p>
         <p className="notice">
           It is a teaching interpreter, not a full compiler: threads, files, LINQ/streams and most of the standard

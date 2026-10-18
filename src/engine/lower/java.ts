@@ -3,7 +3,7 @@ import type { Node } from 'web-tree-sitter';
 import { AUTO, CompileError, type CatchClause, type ClassDef, type Expr, type Func, type Param, type Program, type Stmt, type Ty, type VarDeclItem } from '../ir';
 import { allKids, collectIndexVars, endLineOf, f, fields, kids, lineOf, parseNumber, primName, ty, unescape, unsupported } from './util';
 
-export function lowerJava(root: Node): Program {
+export function lowerJava(root: Node, requireEntry = true): Program {
   const prog: Program = { lang: 'java', funcs: Object.create(null), classes: Object.create(null), globals: [] };
   let lambdaSeq = 0;
 
@@ -377,6 +377,6 @@ export function lowerJava(root: Node): Program {
     else if (n.type === 'interface_declaration') defineInterface(n);
     else if (n.type === 'enum_declaration') defineEnum(n);
   }
-  if (!prog.entry) throw new CompileError('No main method found. Add `public static void main(String[] args) { ... }` inside a class.', 1);
+  if (!prog.entry && requireEntry) throw new CompileError('No main method found. Add `public static void main(String[] args) { ... }` inside a class.', 1);
   return prog;
 }

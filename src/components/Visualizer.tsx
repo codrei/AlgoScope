@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
 import { lockedCells, recursionRoot, structuresFor, type CallNode, type LockInfo, type StructRef } from '../lib/analysis';
 import { ArrayView, cellText, rolesFor } from './ArrayView';
-import { GraphView, Grid2D, isAdjacencyMatrix, MapView, MatrixGraphView, RecursionTree } from './Structures';
+import { GraphView, Grid2D, HeapTree, isAdjacencyMatrix, MapView, MatrixGraphView, RecursionTree } from './Structures';
 
 export type ViewMode = 'beginner' | 'detailed';
 
@@ -194,7 +194,20 @@ function Stage(p: {
     const info = locks.get(a.id);
     const locked = lockedCells(info, stepIndex, isLast);
     const allLocked = !!info && locked.size === a.item.items.length && a.item.items.length > 1;
-    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner && arrays.length === 1} />);
+    // heap sort / priority queues: also draw the array as the tree it represents
+    const inHeapFn = step.frames.some((f) => /heap|sift|percolate/i.test(f.name));
+    const worked = step.touches.some((t) => t.id === a.id) || step.frames[step.frames.length - 1]?.vars.some(([, v]) => v.t === 'r' && v.id === a.id);
+    const asHeap = (a.item.heap || (inHeapFn && worked)) && a.item.items.every((v) => v.t === 'p');
+    let heapSize = a.item.items.length;
+    if (asHeap && !a.item.heap) {
+      const cur = step.frames[step.frames.length - 1];
+      const sizeVar = cur?.vars.find(([n, v]) => /^(n|size|heapSize|heap_size|heapsize|len|length|count)$/.test(n) && v.t === 'p' && v.n !== undefined && Number.isInteger(v.n));
+      if (sizeVar && sizeVar[1].t === 'p') heapSize = sizeVar[1].n as number;
+    }
+    // in heap code left/right are children, not a range: fade the sorted tail instead
+    const range = asHeap ? { lo: 0, hi: heapSize - 1 } : a.range;
+    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner && arrays.length === 1} fieldMarkers={a.fieldMarkers} info={a.info} activeRange={range} />);
+    if (asHeap) views.push(<HeapTree key={`heap${a.id}`} item={a.item} step={step} size={heapSize} />);
   }
   if (objects.roots.length) views.push(<GraphView key="graph" step={step} prev={prev} roots={objects.roots} />);
   for (const m of maps.slice(0, beginner ? 1 : 3)) if (m.item.kind === 'map') views.push(<MapView key={m.id} item={m.item} names={m.names} step={step} />);
@@ -393,6 +406,18 @@ function OutputBox({ trace, step, compact }: { trace: Trace; step: Step; compact
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [text]);
+  if (step.screen) {
+    // Turbo C console (clrscr / gotoxy): show the screen as it looks
+    let last = step.screen.length - 1;
+    while (last > 0 && !step.screen[last].trim()) last--;
+    const rows = step.screen.slice(0, Math.max(last + 1, 3));
+    return (
+      <div className="box screen-box">
+        <div className="box-title"><Terminal size={13} /> Screen (console)</div>
+        <pre className="screen" aria-label="Console screen">{rows.join('\n')}</pre>
+      </div>
+    );
+  }
   if (compact && !text) return null;
   return (
     <div className={`box ${compact ? 'output-compact' : ''}`}>

@@ -7,6 +7,7 @@ import { lowerCSharp } from './lower/csharp';
 import { lowerJava } from './lower/java';
 import { lowerPython } from './lower/python';
 import { findSyntaxError } from './lower/util';
+import { suggestEntry, type Suggestion } from './suggest';
 import type { Trace } from './trace';
 
 export type { Trace, Step, HeapItem, SnapVal, FrameSnap, Touch } from './trace';
@@ -110,19 +111,66 @@ export function protectComparisons(src: string): { code: string; swapped: Set<nu
 export interface RunResult {
   trace?: Trace;
   compileError?: { msg: string; line: number };
+  /** things AlgoScope fixed up in the code before running it */
+  notices?: string[];
+  /** the code with a generated main() (or call) when the code only defines functions */
+  suggestion?: Suggestion;
+}
+
+const C_KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'return', 'sizeof', 'else', 'do', 'case', 'typedef', 'struct', 'enum', 'union']);
+
+/**
+ * Code copied from slides and old textbooks: curly quotes, non-breaking spaces and dashes,
+ * and K&R C functions written without a return type ("main()" / "factorial(int n)").
+ */
+export function normalizeSource(lang: Lang, src: string): { code: string; notices: string[] } {
+  const notices: string[] = [];
+  let code = src;
+  if (/[\u201C\u201D\u2018\u2019\u00A0\u2013\u2014\u2212]/.test(code)) {
+    code = code
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/\u00A0/g, ' ')
+      .replace(/[\u2013\u2014\u2212]/g, '-');
+    notices.push('Curly quotes or dashes (usually copied from slides) were changed to plain " \' and -.');
+  }
+  if (lang === 'c' || lang === 'cpp') {
+    let depth = 0;
+    let fixed = false;
+    code = code
+      .split('\n')
+      .map((line) => {
+        let out = line;
+        const m = /^(\s*)([A-Za-z_]\w*)(\s*\([^;]*\)\s*(\{.*)?)$/.exec(line);
+        if (depth === 0 && m && !C_KEYWORDS.has(m[2]) && !/^\s*#/.test(line)) {
+          out = `${m[1]}int ${m[2]}${m[3]}`;
+          fixed = true;
+        }
+        for (const ch of line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\/\/.*$/g, '')) {
+          if (ch === '{') depth++;
+          else if (ch === '}') depth = Math.max(0, depth - 1);
+        }
+        return out;
+      })
+      .join('\n');
+    if (fixed) notices.push('Old-style C functions without a return type (like "main()") were treated as returning int.');
+  }
+  return { code, notices };
 }
 
 export async function runCode(lang: Lang, source: string, opts: RunOptions = {}): Promise<RunResult> {
   const language = await languageFor(lang);
   const parser = new Parser();
   parser.setLanguage(language);
-  const fix = lang === 'cpp' ? protectComparisons(source) : { code: source, swapped: new Set<number>() };
+  const norm = normalizeSource(lang, source);
+  const fix = lang === 'cpp' ? protectComparisons(norm.code) : { code: norm.code, swapped: new Set<number>() };
   const tree = parser.parse(fix.code);
   if (!tree) return { compileError: { msg: 'could not parse the code', line: 1 } };
   try {
     const syn = findSyntaxError(tree.rootNode);
     if (syn) {
       return {
+        notices: norm.notices.length ? norm.notices : undefined,
         compileError: {
           msg: `Syntax error near ${syn.text ? `"${syn.text}"` : `line ${syn.line}`}. Check for a missing ; ( ) { } or a typo.`,
           line: syn.line,
@@ -133,7 +181,7 @@ export async function runCode(lang: Lang, source: string, opts: RunOptions = {})
     switch (lang) {
       case 'c':
       case 'cpp':
-        prog = lowerCFamily(tree.rootNode, lang, { source, swapped: fix.swapped });
+        prog = lowerCFamily(tree.rootNode, lang, { source: norm.code, swapped: fix.swapped });
         break;
       case 'java':
         prog = lowerJava(tree.rootNode);
@@ -146,8 +194,24 @@ export async function runCode(lang: Lang, source: string, opts: RunOptions = {})
         break;
     }
     const trace = new Interp(prog, opts).run();
-    return { trace };
+    let suggestion: Suggestion | undefined;
+    // Python file that only defines functions: offer to add a call
+    if (lang === 'python' && Object.keys(prog.funcs).some((k) => !k.includes('@')) && !prog.globals.some((g) => g.k === 'expr' || g.k === 'if' || g.k === 'for' || g.k === 'foreach' || g.k === 'while')) {
+      suggestion = suggestEntry(lang, source, prog) ?? undefined;
+    }
+    return { trace, notices: norm.notices.length ? norm.notices : undefined, suggestion };
   } catch (e) {
+    if (e instanceof CompileError && /^No main/i.test(e.message) && lang !== 'python') {
+      // slides often show just the function: offer a main() that calls it
+      let suggestion: Suggestion | undefined;
+      try {
+        const p2 = lang === 'java' ? lowerJava(tree.rootNode, false) : lang === 'csharp' ? lowerCSharp(tree.rootNode, false) : lowerCFamily(tree.rootNode, lang, { source: norm.code, swapped: fix.swapped }, false);
+        suggestion = suggestEntry(lang, norm.code, p2) ?? undefined;
+      } catch {
+        suggestion = undefined;
+      }
+      return { compileError: { msg: e.message, line: e.line }, suggestion, notices: norm.notices.length ? norm.notices : undefined };
+    }
     if (e instanceof CompileError) return { compileError: { msg: e.message, line: e.line } };
     return { compileError: { msg: e instanceof Error ? e.message : String(e), line: 1 } };
   } finally {

@@ -36,7 +36,7 @@ export type Expr =
   | { k: 'call'; ln: number; callee: Expr; args: Expr[] }
   | { k: 'index'; ln: number; obj: Expr; idx: Expr }
   | { k: 'slice'; ln: number; obj: Expr; lo?: Expr; hi?: Expr; step?: Expr }
-  | { k: 'member'; ln: number; obj: Expr; name: string }
+  | { k: 'member'; ln: number; obj: Expr; name: string; arrow?: boolean }
   | { k: 'newarr'; ln: number; ty: Ty; dims: (Expr | null)[]; init?: Expr }
   | { k: 'newobj'; ln: number; ty: Ty; args: Expr[] }
   | { k: 'list'; ln: number; items: Expr[]; kind: 'list' | 'tuple' | 'set' | 'init' }
@@ -61,6 +61,8 @@ export interface VarDeclItem {
   ctorArgs?: Expr[];
   /** extra pointer levels on this declarator (int *p) */
   ptr?: number;
+  /** C++ reference variable (int &r = x): r is another name for x */
+  ref?: boolean;
 }
 
 export type Stmt =

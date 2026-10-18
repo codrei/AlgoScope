@@ -236,6 +236,19 @@ export function builtinName(I: Interp, name: string): R {
       case 'UINT_MAX': return 4294967295;
       case 'RAND_MAX': return 2147483647;
       case 'EOF': return -1;
+      // conio.h colors
+      case 'BLINK': return 128;
+      case 'BLACK': return 0;
+      case 'BLUE': return 1;
+      case 'GREEN': return 2;
+      case 'CYAN': return 3;
+      case 'RED': return 4;
+      case 'MAGENTA': return 5;
+      case 'BROWN': return 6;
+      case 'LIGHTGRAY': return 7;
+      case 'DARKGRAY': return 8;
+      case 'YELLOW': return 14;
+      case 'WHITE': return 15;
       case 'M_PI': return new Flt(Math.PI);
       case 'true': return true;
       case 'false': return false;
@@ -245,7 +258,7 @@ export function builtinName(I: Interp, name: string): R {
   if (L === 'java') {
     switch (name) {
       case 'System': case 'Math': case 'Integer': case 'Long': case 'Double': case 'Character': case 'String':
-      case 'Arrays': case 'Collections': case 'Boolean': case 'List': case 'Comparator':
+      case 'Arrays': case 'Collections': case 'Boolean': case 'List': case 'Comparator': case 'IO':
         return new Special(name);
     }
   }
@@ -731,6 +744,49 @@ function cFunction(I: Interp, name: string, args: Expr[]): R {
     case 'srand': seed = num(vals(I, args)[0]); return undefined;
     case 'time': return 1700000000;
     case 'exit': throw I.err(`exit(${num(vals(I, args)[0] ?? 0)}) called`);
+    // Turbo C / conio.h console
+    case 'clrscr': {
+      vals(I, args);
+      I.enableScreen();
+      I.screen!.fill('');
+      I.cursor = { x: 0, y: 0 };
+      I.note = 'clear the screen';
+      return undefined;
+    }
+    case 'gotoxy': {
+      const [x, y] = vals(I, args).map(num);
+      I.enableScreen();
+      I.cursor = { x: Math.max(0, Math.min(79, x - 1)), y: Math.max(0, Math.min(24, y - 1)) };
+      I.note = `move the cursor to column ${x}, row ${y}`;
+      return undefined;
+    }
+    case 'cprintf': {
+      const v = vals(I, args);
+      I.write(printf(I.strOf(v[0]), v.slice(1).map(cArg), I.lang));
+      return 0;
+    }
+    case 'cputs': I.write(cStr(vals(I, args)[0])); return 0;
+    case 'getch': case 'getche': case '_getch': {
+      const k = I.readKey();
+      if (k === -1) {
+        I.note = 'getch(): no more keys in the Input box, so it returns Esc (27)';
+        return 27;
+      }
+      if (name === 'getche' && k >= 32) I.write(String.fromCharCode(k));
+      I.note = `getch() read key code ${k}${k >= 32 && k < 127 ? ` ('${String.fromCharCode(k)}')` : ''}`;
+      return k;
+    }
+    case 'kbhit': case '_kbhit': return I.stdinPos < I.stdin.length ? 1 : 0;
+    case 'wherex': return I.cursor.x + 1;
+    case 'wherey': return I.cursor.y + 1;
+    case 'textcolor': case 'textbackground': case 'textattr': case 'delay': case 'sleep': case 'Sleep': case 'sound': case 'nosound': case '_setcursortype': case 'highvideo': case 'lowvideo': case 'normvideo':
+      vals(I, args);
+      return undefined;
+    // Dev-C++ / Windows console helpers do nothing here
+    case 'system':
+      vals(I, args);
+      I.note = 'system(...) is ignored here (it controls the Windows console)';
+      return 0;
     case 'memset': {
       const [a, v] = vals(I, args);
       if (a instanceof Arr) {
@@ -874,7 +930,7 @@ function iterRange(I: Interp, a: Val, b: Val): { arr: Arr; from: number; to: num
 }
 
 // ------------------------------------------------------------------ members (properties)
-export function getMember(I: Interp, o: Val, name: string): R {
+export function getMember(_I: Interp, o: Val, name: string): R {
   if (o instanceof Special) {
     const k = o.kind;
     switch (`${k}.${name}`) {
@@ -900,7 +956,7 @@ export function getMember(I: Interp, o: Val, name: string): R {
   }
   if (o instanceof Arr) {
     switch (name) {
-      case 'length': if (I.lang === 'java') return o.items.length; break;
+      case 'length': return o.items.length;
       case 'Length': case 'Count': return o.items.length;
       // a {a, b} brace list used as a std::pair
       case 'first': if (o.kind === 'tuple' || (o.kind === 'array' && o.items.length === 2)) return o.items[0]; break;
@@ -1156,6 +1212,34 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
       if (name === 'naturalOrder') return nativeFn('comparator', ([x, y]) => naturalCmp(I)(x, y));
       break;
     }
+    case 'IO':
+      // the textbook IO helper class: IO.readInt(), IO.readDouble(), IO.readString()...
+      switch (name) {
+        case 'readInt': case 'readLong': {
+          const t = I.readToken();
+          if (t === null) throw I.err('IO.readInt(): no more input (type input values in the Input box)');
+          return parseInt(t, 10);
+        }
+        case 'readDouble': case 'readFloat': {
+          const t = I.readToken();
+          if (t === null) throw I.err('IO.readDouble(): no more input (type input values in the Input box)');
+          return new Flt(parseFloat(t));
+        }
+        case 'readString': case 'readWord': {
+          const t = I.readToken();
+          if (t === null) throw I.err('IO.readString(): no more input (type input values in the Input box)');
+          return t;
+        }
+        case 'readLine': return I.readLine() ?? '';
+        case 'readChar': { const t = I.readToken(); return new Chr((t ?? ' ').charCodeAt(0)); }
+        case 'readBoolean': return (I.readToken() ?? '').toLowerCase() === 'true';
+        case 'print': case 'println': case 'outputln': {
+          const a = vals(I, args);
+          I.write((a.length ? I.strOf(a[0]) : '') + (name === 'print' ? '' : '\n'));
+          return undefined;
+        }
+      }
+      break;
     case 'Scanner':
       switch (name) {
         case 'nextInt': case 'nextLong': {

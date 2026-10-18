@@ -36,6 +36,18 @@ function save(key: string, v: unknown) {
 }
 
 const LANG_IDS: Lang[] = ['c', 'cpp', 'java', 'csharp', 'python'];
+const LANG_NAMES: Record<Lang, string> = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' };
+
+/** An example's code for a language; lesson examples exist only in the language used in class. */
+function exampleCode(e: Example, l: Lang): string {
+  const c = e.code[l];
+  if (c !== undefined) return c;
+  const comment = l === 'python' ? '#' : '//';
+  const other = e.only ? LANG_NAMES[e.only] : 'another language';
+  return `${comment} "${e.title}" is written in ${other}, the language used in the lesson.\n${comment} Switch to the ${other} tab to run it, or write your own ${LANG_NAMES[l]} version here.\n`;
+}
+
+const allCodes = (e: Example) => Object.fromEntries(LANG_IDS.map((l) => [l, exampleCode(e, l)])) as Record<Lang, string>;
 
 // Link parameters, e.g. ?example=merge-sort&lang=java&run=1&step=40&present=1&theme=dark
 const params = new URLSearchParams(window.location.search);
@@ -50,16 +62,19 @@ const P = {
 };
 
 export default function App() {
-  const [example, setExample] = useState<Example>(() => EXAMPLES.find((e) => e.id === (P.example ?? load('as.example', ''))) ?? EXAMPLES[0]);
+  const [example, setExample] = useState<Example>(() => EXAMPLES.find((e) => e.id === (P.example ?? load('as.example', ''))) ?? EXAMPLES.find((e) => e.id === 'bubble-sort') ?? EXAMPLES[0]);
   const [lang, setLang] = useState<Lang>(() => {
     const l = P.lang ?? load<Lang>('as.lang', 'cpp');
     return LANG_IDS.includes(l) ? l : 'cpp';
   });
-  const [codes, setCodes] = useState<Record<Lang, string>>(() => ({ ...example.code }));
+  const [codes, setCodes] = useState<Record<Lang, string>>(() => allCodes(example));
   const [stdin, setStdin] = useState(example.stdin ?? '');
   const [trace, setTrace] = useState<Trace | null>(null);
   const [traceCode, setTraceCode] = useState('');
   const [compileError, setCompileError] = useState<{ msg: string; line: number } | null>(null);
+  const [notices, setNotices] = useState<string[]>([]);
+  const [suggestion, setSuggestion] = useState<{ code: string; calls: string } | null>(null);
+  const pendingRun = useRef(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(() => load('as.speed', 1));
@@ -103,6 +118,8 @@ export default function App() {
       const src = code;
       const r = await runCode(lang, src, { stdin });
       setTraceCode(src);
+      setNotices(r.notices ?? []);
+      setSuggestion(r.suggestion ?? null);
       if (r.compileError) {
         setCompileError(r.compileError);
         setTrace(null);
@@ -125,6 +142,14 @@ export default function App() {
       setRunning(false);
     }
   }, [code, lang, stdin]);
+
+  // run again right after "Add a main() for me" put the new code in the editor
+  useEffect(() => {
+    if (pendingRun.current) {
+      pendingRun.current = false;
+      run();
+    }
+  }, [code, run]);
 
   // ?run=1 runs the code as soon as the page opens
   const autoRan = useRef(false);
@@ -223,15 +248,29 @@ export default function App() {
 
   const chooseExample = (e: Example) => {
     setExample(e);
-    setCodes({ ...e.code });
+    setCodes(allCodes(e));
+    if (e.only) setLang(e.only);
     setStdin(e.stdin ?? '');
     setTrace(null);
     setCompileError(null);
     setPlaying(false);
   };
 
-  const edited = code.trim() !== example.code[lang].trim();
-  const header: HeaderInfo = edited
+  const edited = code.trim() !== exampleCode(example, lang).trim();
+  // mostly different from the example = the user's own program
+  const exampleLines = new Set(exampleCode(example, lang).split('\n').map((l) => l.trim()).filter(Boolean));
+  const codeLines = code.split('\n').map((l) => l.trim()).filter(Boolean);
+  const shared = codeLines.filter((l) => exampleLines.has(l)).length;
+  const ownCode = edited && shared < codeLines.length * 0.5;
+  const langName = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' }[lang];
+  const header: HeaderInfo = ownCode
+    ? {
+        eyebrow: `${langName} · your code`,
+        title: 'Your program',
+        description: 'Your own code, running one step at a time.',
+        pills: [],
+      }
+    : edited
     ? {
         eyebrow: `${example.topic} · edited code`,
         title: code.trim() ? 'Your program' : 'New program',
@@ -284,7 +323,7 @@ export default function App() {
             onCode={(c) => setCodes((cs) => ({ ...cs, [lang]: c }))}
             onRun={run}
             onReset={() => {
-              setCodes((cs) => ({ ...cs, [lang]: example.code[lang] }));
+              setCodes((cs) => ({ ...cs, [lang]: exampleCode(example, lang) }));
               setStdin(example.stdin ?? '');
             }}
             running={running}
@@ -292,6 +331,14 @@ export default function App() {
             errorLine={errorLine}
             error={errorMsg}
             stale={stale}
+            notices={stale ? [] : notices}
+            suggestion={stale ? null : suggestion}
+            onUseSuggestion={() => {
+              if (!suggestion) return;
+              setCodes((cs) => ({ ...cs, [lang]: suggestion.code }));
+              setSuggestion(null);
+              pendingRun.current = true;
+            }}
             stdin={stdin}
             onStdin={setStdin}
             dark={dark}

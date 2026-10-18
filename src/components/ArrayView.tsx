@@ -43,15 +43,20 @@ interface Props {
   locked: Set<number>;
   allLocked: boolean;
   big?: boolean;
+  fieldMarkers?: Map<number, string[]>;
+  info?: string;
+  /** the part of the array in use (cells outside are faded) */
+  activeRange?: { lo: number; hi: number };
 }
 
-export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big }: Props) {
+export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big, fieldMarkers, info, activeRange }: Props) {
   const roles = rolesFor(step, item.id);
   const n = item.items.length;
   const maxLen = Math.max(1, ...item.items.map((v) => cellText(v).length));
   const { cell, font, gap } = sizing(n, maxLen, !!big);
   const pitch = cell + gap;
   const markers = markersFor(step, item.id, n);
+  fieldMarkers?.forEach((ms, i) => markers.set(i, [...(markers.get(i) ?? []), ...ms]));
   const kind = item.arrKind;
 
   // pair of cells highlighted together -> bracket with the operator
@@ -68,7 +73,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
   };
   const lo = find(['left', 'low', 'lo', 'l', 'start']);
   const hi = find(['right', 'high', 'hi', 'r', 'end']);
-  const range = lo !== undefined && hi !== undefined && lo <= hi ? { lo, hi } : null;
+  const range = activeRange ?? (lo !== undefined && hi !== undefined && lo <= hi ? { lo, hi } : null);
 
   const style = { '--cell': `${cell}px`, '--cell-font': `${font}px`, '--gap': `${gap}px` } as CSSProperties;
 
@@ -93,7 +98,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
   const isQueue = kind === 'queue' || kind === 'deque';
   return (
     <div className="struct">
-      <Label names={names} kind={kindLabel(kind)} n={n} sorted={allLocked} />
+      <Label names={names} kind={kindLabel(kind)} n={n} sorted={allLocked} info={info} />
       <div className="cells" style={style}>
         {n === 0 && <div className="cell null">empty</div>}
         {pair && (
@@ -149,12 +154,13 @@ function kindLabel(k: HeapArr['arrKind']): string {
   }
 }
 
-export function Label({ names, kind, n, sorted }: { names: string[]; kind: string; n: number; sorted: boolean }) {
+export function Label({ names, kind, n, sorted, info }: { names: string[]; kind: string; n: number; sorted: boolean; info?: string }) {
   return (
     <div className="struct-label">
       <b>{names.join(' = ')}</b>
       <span className="kind">{kind}</span>
       <span>{n} item{n === 1 ? '' : 's'}</span>
+      {info && <span className="struct-info">{info}</span>}
       {sorted && <span className="sorted-badge">SORTED</span>}
     </div>
   );

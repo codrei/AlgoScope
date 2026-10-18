@@ -166,6 +166,46 @@ export class Interp {
   countsOnly: boolean;
   stepCount = 0;
   cout: StreamState = { fixed: false, precision: 6, width: 0, boolalpha: false };
+  /** Turbo C text screen, created by the first clrscr() / gotoxy() */
+  screen?: string[];
+  cursor = { x: 0, y: 0 };
+
+  enableScreen() {
+    if (!this.screen) this.screen = Array.from({ length: 25 }, () => '');
+  }
+
+  private screenWrite(text: string) {
+    const sc = this.screen!;
+    for (const ch of text) {
+      if (ch === '\n') {
+        this.cursor.y = Math.min(24, this.cursor.y + 1);
+        this.cursor.x = 0;
+        continue;
+      }
+      if (ch === '\r') {
+        this.cursor.x = 0;
+        continue;
+      }
+      const row = sc[this.cursor.y].padEnd(this.cursor.x, ' ');
+      sc[this.cursor.y] = row.slice(0, this.cursor.x) + ch + row.slice(this.cursor.x + 1);
+      this.cursor.x = Math.min(79, this.cursor.x + 1);
+    }
+  }
+
+  /** Next key for getch(): <up> <down> <left> <right> <esc> <enter> or a single character. */
+  readKey(): number {
+    const rest = this.stdin.slice(this.stdinPos);
+    const named: Record<string, number> = { up: 72, down: 80, left: 75, right: 77, esc: 27, enter: 13, space: 32, tab: 9, backspace: 8 };
+    const m = /^<(\w+)>/i.exec(rest);
+    if (m && named[m[1].toLowerCase()] !== undefined) {
+      this.stdinPos += m[0].length;
+      return named[m[1].toLowerCase()];
+    }
+    while (this.stdinPos < this.stdin.length && (this.stdin[this.stdinPos] === '\n' || this.stdin[this.stdinPos] === '\r') && this.stdin.slice(this.stdinPos).trim() !== '' && /^\s*</.test(this.stdin.slice(this.stdinPos))) this.stdinPos++;
+    if (this.stdinPos >= this.stdin.length) return -1;
+    const ch = this.stdin[this.stdinPos++];
+    return ch === '\n' ? 13 : ch.charCodeAt(0);
+  }
   private heapCache = new Map<number, { ver: number; item: HeapItem }>();
   private globalIndexVars: Record<string, string[]>;
 
@@ -254,10 +294,8 @@ export class Interp {
         const entry = this.prog.entry!;
         const fn = entry.cls ? this.classes.get(entry.cls)!.def.methods[entry.name][0] : this.prog.funcs[entry.name][0];
         const args: Val[] = fn.params.map(() => new Arr([], 'array', { base: 'string', arr: 0, ptr: 0 }));
-        const rv = this.invoke(fn, args, undefined);
-        const code = (this.lang === 'c' || this.lang === 'cpp') && typeof rv === 'number' ? ` (returned ${rv})` : '';
-        this.ln = fn.endLn;
-        this.step(fn.endLn, 'end', `Program finished${code}`);
+        this.entryFn = fn;
+        this.invoke(fn, args, undefined);
       }
     } catch (e) {
       if (e instanceof StepLimit) {
@@ -349,6 +387,7 @@ export class Interp {
       out: this.out.length,
       touches: this.touches,
       counts: { ...this.counts },
+      screen: this.screen ? [...this.screen] : undefined,
     });
     this.resetEvents();
   }
@@ -405,7 +444,7 @@ export class Interp {
         continue;
       }
       let item: HeapItem;
-      if (o instanceof Arr) item = { kind: 'arr', id: o.id, arrKind: o.kind, items: o.items.map(sv) };
+      if (o instanceof Arr) item = { kind: 'arr', id: o.id, arrKind: o.kind, items: o.items.map(sv), heap: o.kind === 'pq' || o.minHeap !== undefined || undefined };
       else if (o instanceof Obj) item = { kind: 'obj', id: o.id, cls: o.cls, fields: [...o.fields].map(([k, x]) => [k, sv(x)] as [string, SnapVal]) };
       else {
         let entries = [...o.entries.values()];
@@ -485,6 +524,16 @@ export class Interp {
           const t: Ty = { ...s.ty, ptr: s.ty.ptr + (d.ptr ?? 0) };
           let v: Val;
           this.note = undefined;
+          const lvKinds = ['name', 'index', 'member', 'un'];
+          if (d.ref && d.init && lvKinds.includes(d.init.k)) {
+            // a reference is another name for an existing variable
+            const cell = this.lv(d.init);
+            const scopes = this.frame.scopes;
+            scopes[scopes.length - 1].set(d.name, cell);
+            texts.push(`${d.name} refers to ${cell.label()}`);
+            says.push(`${d.name} becomes another name for ${cell.label()}.`);
+            continue;
+          }
           if (d.dims) {
             t.arr = d.dims.length;
             v = this.makeCArray({ ...t, arr: 0 }, d.dims, d.init);
@@ -669,6 +718,7 @@ export class Interp {
 
   noteKind?: StepKind;
   currentException?: Obj;
+  entryFn?: Func;
 
   makeException(cls: string, msg: Val): Obj {
     const o = new Obj(cls);
@@ -935,7 +985,7 @@ export class Interp {
       case 'name': return e.name;
       case 'this': return this.lang === 'python' ? 'self' : 'this';
       case 'member': {
-        const o = e.obj.k === 'this' && this.lang !== 'python' ? '' : this.label(e.obj) + (this.lang === 'c' || this.lang === 'cpp' ? (e.obj.k === 'this' ? '->' : '.') : '.');
+        const o = e.obj.k === 'this' && this.lang !== 'python' ? '' : this.label(e.obj) + (e.arrow ? '->' : '.');
         return o + e.name;
       }
       case 'index': return `${this.label(e.obj)}[…]`;
@@ -1157,6 +1207,7 @@ export class Interp {
   }
 
   write(s: string) {
+    if (this.screen) this.screenWrite(s);
     this.out += s;
     if (this.out.length > 200000) throw this.err('too much output (over 200,000 characters)');
     const shown = s.length > 40 ? s.slice(0, 40) + '…' : s;
@@ -1468,9 +1519,8 @@ export class Interp {
   }
 
   private memberLabel(e: Extract<Expr, { k: 'member' }>): string {
-    if (e.obj.k === 'this' && this.lang !== 'python') return `this.${e.name}`;
-    const arrow = this.lang === 'c' || this.lang === 'cpp' ? '->' : '.';
-    return `${this.label(e.obj)}${arrow}${e.name}`;
+    if (e.obj.k === 'this' && this.lang !== 'python') return e.name;
+    return `${this.label(e.obj)}${e.arrow ? '->' : '.'}${e.name}`;
   }
 
   evIndexFull(e: Extract<Expr, { k: 'index' }>): { cont: Val; key: Val; label: string } {
@@ -1899,6 +1949,13 @@ export class Interp {
     try {
       const r = this.execList(fn.body);
       rv = r && r.t === 'return' ? r.v : this.lang === 'python' ? null : undefined;
+      if (fn === this.entryFn && this.frames[this.frames.length - 1] === fr) {
+        // the last step still shows main's variables and data
+        const code = (this.lang === 'c' || this.lang === 'cpp') && typeof rv === 'number' ? ` (returned ${rv})` : '';
+        this.ln = fn.endLn;
+        fr.ln = fn.endLn;
+        this.step(fn.endLn, 'end', `Program finished${code}`);
+      }
     } finally {
       this.frames.pop();
     }

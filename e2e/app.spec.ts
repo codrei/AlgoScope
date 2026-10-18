@@ -166,3 +166,37 @@ test('playback controls fit on one row on a 1366px laptop', async ({ page }) => 
   const h = await page.locator('.playback').evaluate((e) => e.getBoundingClientRect().height);
   expect(h).toBeLessThan(80);
 });
+
+test('the lessons menu opens the professor\'s own programs', async ({ page }) => {
+  await fresh(page);
+  await page.getByRole('button', { name: /Bubble Sort/ }).click();
+  await page.getByRole('menuitem', { name: /Lesson 6 · Stack/ }).click();
+  await expect(page.locator('.viz-header h1')).toHaveText('Lesson 6 · Stack (struct)');
+  await page.getByRole('button', { name: 'Run' }).click();
+  await expect(page.locator('.step-say')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.locator('.struct', { hasText: 's.items' }).first()).toContainText('top');
+});
+
+test('the Turbo C maze draws on the console screen', async ({ page }) => {
+  await fresh(page, '?example=lesson-smolmaze&run=1');
+  await expect(page.locator('.step-say')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.locator('.screen')).toContainText('Congrats, you found the secret door!!!');
+});
+
+test('"Add a main() for me" turns a slide snippet into a program', async ({ page }) => {
+  await fresh(page, '?example=factorial&lang=c');
+  await page.locator('.monaco-editor').click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText('int sum(int arr[], int n) {\nint s = 0;\nfor (int i = 0; i < n; i++) s += arr[i];\nreturn s;\n}\n');
+  // drop the brace the editor auto-closed after the paste
+  await page.keyboard.press('Control+Shift+End');
+  await page.keyboard.press('Delete');
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('int sum');
+  await page.getByRole('button', { name: 'Run' }).click();
+  await page.getByRole('button', { name: 'Add a main() for me' }).click();
+  await expect(page.locator('.step-say')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.locator('.console')).toContainText('sum returned 23');
+});

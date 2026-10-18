@@ -16,7 +16,7 @@ interface Declarator {
   node: Node;
 }
 
-export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swapped: Set<number> }): Program {
+export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swapped: Set<number> }, requireEntry = true): Program {
   const prog: Program = { lang, funcs: Object.create(null), classes: Object.create(null), globals: [] };
   // source text of a node, with any protected '<' restored
   const txt = (n: Node) => (fix ? fix.source.slice(n.startIndex, n.endIndex) : n.text);
@@ -485,6 +485,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
       }
       const item: VarDeclItem = { name: d.name };
       if (d.ptr) item.ptr = d.ptr;
+      if (d.ref) item.ref = true;
       if (d.dims.length) item.dims = d.dims;
       if (dn.type === 'init_declarator') {
         const v = f(dn, 'value')!;
@@ -572,6 +573,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         if (fn.type === 'template_function') {
           const name = f(fn, 'name')!.text.replace(/^std::/, '');
           const targs = kids(f(fn, 'arguments')!).map((a) => typeOf(a));
+          if (/^(static|dynamic|reinterpret|const)_cast$/.test(name)) return { k: 'cast', ln, ty: targs[0], e: args[0] };
           if (['vector', 'stack', 'queue', 'deque', 'pair', 'priority_queue', 'list'].includes(name)) {
             return { k: 'newobj', ln, ty: ty(name, 0, 0, targs), args };
           }
@@ -590,7 +592,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         return { k: 'index', ln, obj, idx: expr(ix) };
       }
       case 'field_expression':
-        return { k: 'member', ln, obj: expr(f(n, 'argument')!), name: f(n, 'field')!.text };
+        return { k: 'member', ln, obj: expr(f(n, 'argument')!), name: f(n, 'field')!.text, arrow: f(n, 'operator')?.text === '->' };
       case 'cast_expression':
         return { k: 'cast', ln, ty: typeOf(f(n, 'type')), e: expr(f(n, 'value')!) };
       case 'sizeof_expression': {
@@ -729,7 +731,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
     if (n.type === 'type_definition' || n.type === 'struct_specifier' || n.type === 'class_specifier') continue;
     top(n);
   }
-  if (!prog.funcs['main']) {
+  if (!prog.funcs['main'] && requireEntry) {
     throw new CompileError('No main() function found. Add `int main() { ... }` that calls your code.', 1);
   }
   prog.entry = { name: 'main' };

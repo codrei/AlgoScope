@@ -1,5 +1,5 @@
 // Derived information computed from a whole trace (used by the visualizer).
-import type { HeapArr, HeapItem, SnapVal, Step, Trace } from '../engine/trace';
+import type { HeapArr, HeapItem, HeapObj, SnapVal, Step, Trace } from '../engine/trace';
 
 export interface LockInfo {
   /** per index: the step after which the cell is in its final place (-1 = never decided) */
@@ -17,9 +17,20 @@ export function computeLocks(trace: Trace): Map<number, LockInfo> {
   if (!last) return out;
   const writes = new Map<number, number>();
   const lockedAt = new Map<number, number[]>();
+  // an array that is only filled (each cell written once, no swaps) is not being sorted
+  const cellWrites = new Map<number, Map<number, number>>();
+  const swapped = new Set<number>();
+  let anyCompare = false;
   trace.steps.forEach((s, si) => {
     for (const t of s.touches) {
       if (t.role === 'read') continue;
+      if (t.role === 'compare') anyCompare = true;
+      if (t.role === 'swap') swapped.add(t.id);
+      if (t.role === 'write') {
+        const m = cellWrites.get(t.id) ?? new Map<number, number>();
+        m.set(t.idx, (m.get(t.idx) ?? 0) + 1);
+        cellWrites.set(t.id, m);
+      }
       if (t.role !== 'compare') writes.set(t.id, (writes.get(t.id) ?? 0) + 1);
       let arr = lockedAt.get(t.id);
       if (!arr) {
@@ -30,7 +41,9 @@ export function computeLocks(trace: Trace): Map<number, LockInfo> {
     }
   });
   for (const [id, at] of lockedAt) {
-    if ((writes.get(id) ?? 0) < 2) continue;
+    if ((writes.get(id) ?? 0) < 2 || !anyCompare) continue;
+    const rewrites = [...(cellWrites.get(id)?.values() ?? [])].some((c) => c >= 2);
+    if (!swapped.has(id) && !rewrites) continue;
     const final = findFinal(trace, id);
     if (!final || final.items.length < 2 || !isSorted(final.items)) continue;
     const n = final.items.length;
@@ -78,6 +91,28 @@ export interface StructRef {
   id: number;
   names: string[];
   item: HeapItem;
+  /** markers from the fields of the struct/class that holds this array (top, front, rear) */
+  fieldMarkers?: Map<number, string[]>;
+  /** other fields of that struct/class, e.g. "count = 3" */
+  info?: string;
+  /** the part of the array in use: 0..top for a stack, front..rear for a queue */
+  range?: { lo: number; hi: number };
+}
+
+/** Fields of a stack/queue struct that point into its array. */
+const INDEX_FIELDS = new Set(['top', 'front', 'rear', 'head', 'tail', 'myFront', 'myBack', 'myTop', 'first', 'last', 'tos', 'f', 'r']);
+
+/** A struct/class that holds arrays but no links to other objects (a STACK, a QUEUE...). */
+function isRecord(step: Step, o: HeapObj): boolean {
+  let arrays = 0;
+  for (const [, v] of o.fields) {
+    if (v.t === 'r' || (v.t === 'ptr' && v.id !== undefined)) {
+      const h = step.heap[(v as { id: number }).id];
+      if (h?.kind === 'obj') return false;
+      if (h?.kind === 'arr') arrays++;
+    }
+  }
+  return arrays > 0;
 }
 
 /** Structures to draw for a step: arrays, objects and maps referenced by variables. */
@@ -103,6 +138,45 @@ export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roo
       // Java/C# main(String[] args) is always empty: not worth drawing
       if (name === 'args' && item.kind === 'arr' && item.items.length === 0) continue;
       if (item.kind === 'obj') {
+        if (isRecord(step, item)) {
+          // draw the struct's arrays as arrays, with its index fields as markers
+          const sep = v.t === 'ptr' ? '->' : '.';
+          const scalars = item.fields.filter(([, x]) => x.t === 'p');
+          for (const [fname, fv] of item.fields) {
+            if (fv.t !== 'r' && fv.t !== 'ptr') continue;
+            const aid = (fv as { id?: number }).id;
+            const arr = aid !== undefined ? step.heap[aid] : undefined;
+            if (!arr || arr.kind !== 'arr' || aid === undefined) continue;
+            const label = `${name}${sep}${fname}`;
+            const ex = seen.get(aid);
+            if (ex) {
+              if (!ex.names.includes(label)) ex.names.push(label);
+              continue;
+            }
+            const fieldMarkers = new Map<number, string[]>();
+            const info: string[] = [];
+            for (const [sn, sv] of scalars) {
+              if (sv.t !== 'p') continue;
+              if (INDEX_FIELDS.has(sn) && sv.n !== undefined && Number.isInteger(sv.n) && sv.n >= 0 && sv.n < arr.items.length) {
+                fieldMarkers.set(sv.n, [...(fieldMarkers.get(sv.n) ?? []), sn]);
+              } else info.push(`${sn} = ${sv.s}`);
+            }
+            const num = (fname2: string) => {
+              const f2 = scalars.find(([sn]) => sn === fname2)?.[1];
+              return f2 && f2.t === 'p' && f2.n !== undefined && Number.isInteger(f2.n) ? f2.n : undefined;
+            };
+            let range: { lo: number; hi: number } | undefined;
+            const top = num('top') ?? num('myTop') ?? num('tos');
+            const front = num('front') ?? num('myFront') ?? num('head');
+            const rear = num('rear') ?? num('myBack') ?? num('tail');
+            if (top !== undefined) range = { lo: 0, hi: top };
+            else if (front !== undefined && rear !== undefined && front !== rear && front <= rear + 1) range = { lo: front, hi: rear };
+            const ref: StructRef = { id: aid, names: [label], item: arr, fieldMarkers, info: info.join(' · '), range };
+            seen.set(aid, ref);
+            order.push(ref);
+          }
+          continue;
+        }
         objRoots.push({ name, id, label });
         continue;
       }
@@ -259,6 +333,8 @@ export function keySteps(trace: Trace): number[] {
   trace.steps.forEach((s, i) => {
     const prev = trace.steps[i - 1];
     let key = KEY_KINDS.has(s.kind) || s.touches.some((t) => t.role !== 'read');
+    // console programs (gotoxy / cprintf): every change on the screen matters
+    if (!key && prev && s.screen && (!prev.screen || s.screen.join('\n') !== prev.screen.join('\n'))) key = true;
     if (!key && prev) {
       for (const [id, h] of Object.entries(s.heap)) {
         const p = prev.heap[Number(id)];
@@ -297,5 +373,6 @@ export function keySteps(trace: Trace): number[] {
   };
   const trimmed = out.filter((i, k) => !(isWriteOnly(i) && out[k + 1] === i + 1 && trace.steps[i + 1].kind === 'swap'));
   // a run of prints (an output loop) collapses to its last step
+  if (trace.steps.some((st) => st.screen)) return trimmed;
   return trimmed.filter((i, k) => !(trace.steps[i].kind === 'print' && trimmed[k + 1] !== undefined && trace.steps[trimmed[k + 1]].kind === 'print'));
 }

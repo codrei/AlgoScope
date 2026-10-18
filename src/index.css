@@ -83,8 +83,10 @@ body,
   margin: 0;
 }
 
-code, pre, kbd, .present-code, .cells, .console, .vars, .var-chip, .step-code, .status, .grid2d, .map-view, .graph-svg, .marker, .lab-table {
+code, pre, kbd, .present-code, .cells, .console, .vars, .var-chip, .step-code, .status, .grid2d, .map-view, .graph-svg, .marker, .lab-table,
+.step-say, .step-caption, .struct-label, .frame-name, .menu-item {
   font-variant-ligatures: none;
+  font-feature-settings: 'calt' 0, 'liga' 0;
 }
 
 body {
@@ -1967,4 +1969,62 @@ input {
 
 .predict-btn {
   padding: 6px 8px;
+}
+
+.struct-info {
+  color: var(--nu-blue);
+  font-weight: 700;
+}
+
+:root[data-theme='dark'] .struct-info {
+  color: var(--nu-gold);
+}
+
+/* Turbo C console screen */
+.screen-box {
+  background: #0b0b2a;
+  border-color: #23235a;
+}
+
+.screen-box .box-title {
+  color: #9aa0d8;
+  border-color: #23235a;
+}
+
+.screen {
+  margin: 0;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 15px;
+  line-height: 1.25;
+  color: #e6e6e6;
+  white-space: pre;
+  overflow: auto;
+  font-variant-ligatures: none;
+}
+
+.run-notice {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--compare-bg);
+  color: var(--text);
+  border-top: 1px solid var(--border);
+}
+
+.suggest-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--nu-gold) 18%, var(--surface));
+  border-top: 1px solid var(--nu-gold-deep);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.run-btn.small {
+  margin-left: auto;
+  padding: 7px 12px;
+  font-size: 13.5px;
+  white-space: nowrap;
 }

@@ -520,3 +520,64 @@ export function RecursionTree({ nodes, root, step, stepIndex }: { nodes: Map<num
     </div>
   );
 }
+
+// ---------------------------------------------------------------- an array drawn as a binary heap
+
+/** The array as the binary tree it represents: children of i are 2i+1 and 2i+2. */
+export function HeapTree({ item, step, size }: { item: HeapArr; step: Step; size: number }) {
+  const roles = new Map<number, string>();
+  for (const t of step.touches) {
+    if (t.id !== item.id) continue;
+    const rank = { read: 1, write: 2, compare: 3, swap: 4 } as const;
+    const cur = roles.get(t.idx) as keyof typeof rank | undefined;
+    if (!cur || rank[t.role] > rank[cur]) roles.set(t.idx, t.role);
+  }
+  const n = Math.min(size, item.items.length, 31);
+  if (n < 1) return null;
+  const depth = Math.floor(Math.log2(n)) + 1;
+  const W = Math.max(260, Math.pow(2, depth - 1) * 52);
+  const levelH = 58;
+  const pos = (i: number) => {
+    const d = Math.floor(Math.log2(i + 1));
+    const first = Math.pow(2, d) - 1;
+    const slots = Math.pow(2, d);
+    return { x: ((i - first + 0.5) / slots) * W, y: 24 + d * levelH };
+  };
+  const r = 18;
+  const fill = (i: number) => {
+    const role = roles.get(i);
+    if (role === 'swap') return ['var(--swap-bg)', 'var(--swap)'];
+    if (role === 'compare') return ['var(--compare-bg)', 'var(--compare)'];
+    if (role === 'write') return ['var(--write-bg)', 'var(--write)'];
+    return ['var(--cell-bg)', 'var(--cell-border)'];
+  };
+  return (
+    <div className="struct">
+      <div className="struct-label">
+        <b>as a heap (tree)</b>
+        <span className="kind">heap</span>
+        <span>children of index i are 2i+1 and 2i+2{size < item.items.length ? ` · heap size ${size}` : ''}</span>
+      </div>
+      <div className="graph-wrap">
+        <svg className="graph-svg" width={W} height={24 + depth * levelH} role="img" aria-label="array drawn as a heap">
+          {Array.from({ length: n }, (_, i) => i).filter((i) => i > 0).map((i) => {
+            const a = pos(Math.floor((i - 1) / 2));
+            const b = pos(i);
+            return <line key={`e${i}`} x1={a.x} y1={a.y + r} x2={b.x} y2={b.y - r} stroke="var(--cell-border)" strokeWidth={2} />;
+          })}
+          {Array.from({ length: n }, (_, i) => {
+            const p = pos(i);
+            const [bg, stroke] = fill(i);
+            return (
+              <g key={i} transform={`translate(${p.x},${p.y})`}>
+                <circle r={r} fill={bg} stroke={stroke} strokeWidth={2.5} />
+                <text textAnchor="middle" y={5} fontSize={14} fontWeight={800} fill="var(--text)">{cellText(item.items[i])}</text>
+                <text textAnchor="middle" y={r + 12} fontSize={9.5} fill="var(--text-3)">{i}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}

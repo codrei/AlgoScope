@@ -1,0 +1,73 @@
+#include<stdio.h>
+#include<conio.h>
+#include<iostream.h>
+void main()
+{
+clrscr();
+int x=1,y=2;
+char ch;
+int loc[7][14]={
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+0,0,0,0,1,0,0,0,0,1,0,0,0,1,
+1,1,1,0,1,0,0,1,1,1,0,0,0,1,
+1,0,0,0,1,0,0,1,0,0,0,0,1,1,
+1,1,1,0,1,0,0,1,0,1,1,1,0,0,
+1,1,1,0,0,0,0,0,0,0,0,0,0,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+
+gotoxy(1,1);cprintf("▓▓▓▓▓▓▓▓▓▓▓▓▓▓");
+gotoxy(1,2);cprintf("    ▓    ▓   ▓");
+gotoxy(1,3);cprintf("▓▓▓ ▓  ▓▓▓   ▓");
+gotoxy(1,4);cprintf("▓   ▓  ▓    ▓▓");
+gotoxy(1,5);cprintf("▓▓▓ ▓  ▓ ▓▓▓ ▓");
+gotoxy(1,6);cprintf("▓▓▓          ▓");
+gotoxy(1,7);cprintf("▓▓▓▓▓▓▓▓▓▓▓▓▓▓");
+
+gotoxy(x,y);cprintf("A");
+ while (ch!=27){
+ ch=getch();
+ switch(ch)
+    {
+     case 72:  //up
+	     {y--;if (loc[y-1][x-1]==1)
+		  {y++;gotoxy(x,y);cprintf("A");}
+	      else
+		  {gotoxy(x,++y);cprintf(" ");
+		   gotoxy(x,--y);cprintf("A");}
+	      break;}
+     case 75:  //left
+	     {x--;if(loc[y-1][x-1]==1)
+		    {x++;gotoxy(x,y);cprintf("A");}
+	      else
+		  {gotoxy(++x,y);cprintf(" ");
+		   gotoxy(--x,y);cprintf("A");}
+	      break;}
+     case 77:  //right
+	     {x++;if(loc[y-1][x-1]==1)
+		    {x--;gotoxy(x,y);cprintf("A");}
+	      else
+		  {gotoxy(--x,y);cprintf(" ");
+		   gotoxy(++x,y);cprintf("A");}
+	      break;}
+
+     case 80:  //down
+	     {y++;if (loc[y-1][x-1]==1)
+		  {y--;gotoxy(x,y);cprintf("A");}
+	      else
+		  {gotoxy(x,--y);cprintf(" ");
+		   gotoxy(x,++y);cprintf("A");}
+	      break;}
+    }  //end of switch
+    //location of X & Y coordinate
+    gotoxy(3,9);cout<<"X: "<<x;
+    gotoxy(6,9);cout<<"  ";
+    gotoxy(6,9);cout<<x;
+    gotoxy(10,9);cout<<"Y: ";
+    gotoxy(13,9);cout<<"  ";
+    gotoxy(13,9);cout<<y;
+    if (x==14 && y==5)
+       {gotoxy(17,5);textcolor(1+BLINK);
+	cprintf("Congrats, you found the secret door!!!");
+       }
+  } //end of while
+}
