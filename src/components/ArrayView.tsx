@@ -24,12 +24,12 @@ export function cellText(v: SnapVal | undefined): string {
   }
 }
 
-function sizing(n: number, maxLen: number) {
-  let cell = 56;
+function sizing(n: number, maxLen: number, big: boolean) {
+  let cell = big && n <= 8 ? 72 : big && n <= 10 ? 62 : 56;
   if (n > 24) cell = 30;
   else if (n > 16) cell = 38;
   else if (n > 10) cell = 46;
-  let font = cell >= 56 ? 20 : cell >= 46 ? 17 : cell >= 38 ? 14 : 12;
+  let font = cell >= 72 ? 27 : cell >= 62 ? 23 : cell >= 56 ? 20 : cell >= 46 ? 17 : cell >= 38 ? 14 : 12;
   if (maxLen > 3) font = Math.max(10, font - (maxLen - 3) * 2.2);
   const gap = cell >= 46 ? 12 : 6;
   return { cell, font, gap };
@@ -42,13 +42,14 @@ interface Props {
   stepIndex: number;
   locked: Set<number>;
   allLocked: boolean;
+  big?: boolean;
 }
 
-export function ArrayView({ item, names, step, stepIndex, locked, allLocked }: Props) {
+export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big }: Props) {
   const roles = rolesFor(step, item.id);
   const n = item.items.length;
   const maxLen = Math.max(1, ...item.items.map((v) => cellText(v).length));
-  const { cell, font, gap } = sizing(n, maxLen);
+  const { cell, font, gap } = sizing(n, maxLen, !!big);
   const pitch = cell + gap;
   const markers = markersFor(step, item.id, n);
   const kind = item.arrKind;

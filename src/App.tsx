@@ -5,11 +5,11 @@ import { LANGS } from './components/EditorPane';
 import { HelpDialog } from './components/HelpDialog';
 import { Playback } from './components/Playback';
 import { TopBar } from './components/TopBar';
-import { Visualizer, type HeaderInfo } from './components/Visualizer';
+import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visualizer';
 import { configureEngine, preload, runCode, type Trace } from './engine';
 import type { Lang } from './engine/ir';
 import { EXAMPLES, type Example } from './examples';
-import { buildCallTree, computeLocks, type CallNode, type LockInfo } from './lib/analysis';
+import { buildCallTree, computeImportance, computeLocks, type CallNode, type LockInfo } from './lib/analysis';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -68,11 +68,13 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [lab, setLab] = useState(P.lab);
   const [zoom, setZoom] = useState(() => load('as.zoom', 1));
+  const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
 
   const code = codes[lang];
   const stale = !!trace && traceCode !== code;
   const locks = useMemo(() => (trace ? computeLocks(trace) : new Map<number, LockInfo>()), [trace]);
   const calls = useMemo(() => (trace ? buildCallTree(trace) : new Map<number, CallNode>()), [trace]);
+  const importance = useMemo(() => (trace ? computeImportance(trace) : new Map<number, number>()), [trace]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -81,6 +83,7 @@ export default function App() {
   useEffect(() => save('as.lang', lang), [lang]);
   useEffect(() => save('as.speed', speed), [speed]);
   useEffect(() => save('as.zoom', zoom), [zoom]);
+  useEffect(() => save('as.mode', mode), [mode]);
   useEffect(() => save('as.example', example.id), [example]);
   useEffect(() => {
     preload(lang).catch(() => undefined);
@@ -134,7 +137,7 @@ export default function App() {
       setPlaying(false);
       return;
     }
-    const t = window.setTimeout(() => setStepIndex((i) => Math.min(i + 1, total - 1)), 800 / speed);
+    const t = window.setTimeout(() => setStepIndex((i) => Math.min(i + 1, total - 1)), 1000 / speed);
     return () => window.clearTimeout(t);
   }, [playing, stepIndex, speed, total, trace]);
 
@@ -256,7 +259,7 @@ export default function App() {
         )}
         <section className="panel viz" aria-label="Visualization">
           <div className="viz-scroll" style={{ zoom }}>
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} locks={locks} calls={calls} code={traceCode || code} present={present} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
             {trace?.truncated && atEnd && (
               <div className="notice">
                 Stopped after {total.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).

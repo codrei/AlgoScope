@@ -232,3 +232,15 @@ export function recursionRoot(nodes: Map<number, CallNode>, step: Step, stepInde
   }
   return best ? best.fid : null;
 }
+
+/** How much each array is worked on (writes and swaps count most), to pick what beginners see. */
+export function computeImportance(trace: Trace): Map<number, number> {
+  const score = new Map<number, number>();
+  for (const s of trace.steps) {
+    for (const t of s.touches) {
+      const w = t.role === 'read' ? 0 : t.role === 'compare' ? 2 : 3;
+      if (w) score.set(t.id, (score.get(t.id) ?? 0) + w);
+    }
+  }
+  return score;
+}

@@ -78,6 +78,8 @@ export interface Step {
   kind: StepKind;
   /** narration shown under the array ("COMPARE arr[0] (5) > arr[1] (1) → true") */
   text: string;
+  /** the same step explained in plain English for beginners */
+  say: string;
   frames: FrameSnap[];
   heap: Record<number, HeapItem>;
   /** length of the program output at this step */

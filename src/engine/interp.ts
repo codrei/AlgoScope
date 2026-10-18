@@ -1,6 +1,7 @@
 // The interpreter: runs a Program one statement at a time and records a Step for each.
 import type { ClassDef, Expr, Func, Lang, Program, Stmt, Ty } from './ir';
 import { display, pyFormatSpec, csFormatItem, type StreamState } from './format';
+import { consequence, OP_WORDS, plain, type CheckCtx } from './say';
 import type { Counts, FrameSnap, HeapItem, SnapVal, Step, StepKind, Touch, Trace } from './trace';
 import {
   Arr, Chr, Flt, FnV, Iter, MapV, Obj, Ptr, RangeV, RefArg, Special, VarCell, isNumeric, keyOf, num, resetIds, truthy, typeName, valEq,
@@ -136,7 +137,10 @@ export class Interp {
   touches: Touch[] = [];
   compareText?: string;
   compareExpr?: Expr;
+  compareSay?: string;
+  compareRes?: boolean;
   swapText?: string;
+  swapSay?: string;
   note?: string;
   silent = 0;
   ln = 1;
@@ -223,7 +227,7 @@ export class Interp {
         const line = e instanceof RuntimeErr ? e.line : this.ln;
         trace.error = { msg, line };
         this.silent = 0;
-        this.pushStep(line, 'error', `ERROR: ${msg}`);
+        this.pushStep(line, 'error', `ERROR: ${msg}`, `Something went wrong on line ${line}: ${msg}`);
       }
     }
     trace.stdout = this.out;
@@ -247,47 +251,61 @@ export class Interp {
   }
 
   // ===================================================================== steps
-  step(ln: number, kind: StepKind, text: string, cond?: Expr, condSrc?: string, result?: boolean) {
+  step(ln: number, kind: StepKind, text: string, cond?: Expr, condSrc?: string, result?: boolean, ctx?: CheckCtx, say?: string) {
     if (this.silent) return;
-    if (this.swapText) {
-      kind = 'swap';
-      text = this.swapText;
-    } else if (this.compareText && (kind === 'check' || kind === 'assign' || kind === 'info')) {
-      if (cond && this.compareExpr === cond) text = `COMPARE ${this.compareText}`;
-      else if (cond) text = `CHECK ${condSrc} → ${result} · COMPARE ${this.compareText}`;
-      else text = `${text} · COMPARE ${this.compareText}`;
-      kind = 'compare';
-    }
     if (this.countsOnly) {
       this.stepCount++;
-      this.touches = [];
-      this.compareText = undefined;
-      this.compareExpr = undefined;
-      this.swapText = undefined;
+      this.resetEvents();
       if (this.stepCount >= this.maxSteps) throw new StepLimit();
       return;
     }
-    this.pushStep(ln, kind, text);
+    let plainText: string | undefined;
+    if (this.swapText) {
+      kind = 'swap';
+      text = this.swapText;
+      plainText = this.swapSay;
+    } else if (this.compareText && (kind === 'check' || kind === 'assign' || kind === 'info')) {
+      const cmp = `${this.compareSay}? ${this.compareRes ? 'Yes' : 'No'}`;
+      if (cond && this.compareExpr === cond) {
+        text = `COMPARE ${this.compareText}`;
+        plainText = cmp + consequence(ctx, result);
+      } else if (cond) {
+        text = `CHECK ${condSrc} → ${result} · COMPARE ${this.compareText}`;
+        plainText = `${cmp}. So the whole condition ${condSrc} is ${result}${consequence(ctx, result)}`;
+      } else {
+        plainText = `${say ?? plain(kind, text)} ${cmp}.`;
+        text = `${text} · COMPARE ${this.compareText}`;
+      }
+      kind = 'compare';
+    }
+    this.pushStep(ln, kind, text, plainText ?? say ?? plain(kind, text, ctx, result));
     if (this.steps.length >= this.maxSteps) throw new StepLimit();
   }
 
-  private pushStep(ln: number, kind: StepKind, text: string) {
+  private resetEvents() {
+    this.touches = [];
+    this.compareText = undefined;
+    this.compareExpr = undefined;
+    this.compareSay = undefined;
+    this.swapText = undefined;
+    this.swapSay = undefined;
+  }
+
+  private pushStep(ln: number, kind: StepKind, text: string, say?: string) {
     const heap: Record<number, HeapItem> = {};
     const frames = this.snapFrames(heap);
     this.steps.push({
       ln,
       kind,
       text,
+      say: say ?? plain(kind, text),
       frames,
       heap,
       out: this.out.length,
       touches: this.touches,
       counts: { ...this.counts },
     });
-    this.touches = [];
-    this.compareText = undefined;
-    this.compareExpr = undefined;
-    this.swapText = undefined;
+    this.resetEvents();
   }
 
   private snapFrames(heap: Record<number, HeapItem>): FrameSnap[] {
@@ -417,6 +435,7 @@ export class Interp {
     switch (s.k) {
       case 'vardecl': {
         const texts: string[] = [];
+        const says: string[] = [];
         for (const d of s.decls) {
           const t: Ty = { ...s.ty, ptr: s.ty.ptr + (d.ptr ?? 0) };
           let v: Val;
@@ -433,8 +452,16 @@ export class Interp {
           }
           this.declare(d.name, v, t.base === 'auto' ? undefined : t);
           texts.push(`${d.name} = ${this.fmt(v)}`);
+          if (v instanceof Arr) says.push(`Create the ${v.kind === 'array' ? 'array' : v.kind} ${d.name} = ${this.fmt(v)}.`);
+          else if (v instanceof Obj) {
+            const fresh = d.ctorArgs || !d.init || d.init.k === 'newobj' || (d.init.k === 'call' && d.init.callee.k === 'name' && this.classes.has(d.init.callee.name));
+            says.push(fresh ? `Create ${d.name}, a new ${v.cls}.` : `Create ${d.name}. It points to the same ${v.cls} as ${this.label(d.init!)}.`);
+          }
+          else if (v === null) says.push(`Create ${d.name}. It points to nothing yet (${this.fmt(v)}).`);
+          else if (v === undefined) says.push(`Create the variable ${d.name} (no value yet).`);
+          else says.push(`Create the variable ${d.name} = ${this.fmt(v)}.`);
         }
-        this.step(s.ln, 'assign', texts.join(', '));
+        this.step(s.ln, 'assign', texts.join(', '), undefined, undefined, undefined, undefined, says.join(' '));
         return undefined;
       }
       case 'expr': {
@@ -448,7 +475,7 @@ export class Interp {
       }
       case 'if': {
         const c = truthy(this.ev(s.c));
-        this.step(s.ln, 'check', `IF ${s.src} → ${c}`, s.c, s.src, c);
+        this.step(s.ln, 'check', `IF ${s.src} → ${c}`, s.c, s.src, c, s.else ? 'ifelse' : 'if');
         if (c) return this.execBlockOrList(s.then);
         if (s.else) return this.execBlockOrList(s.else);
         return undefined;
@@ -456,7 +483,7 @@ export class Interp {
       case 'while': {
         for (;;) {
           const c = truthy(this.ev(s.c));
-          this.step(s.ln, 'check', `WHILE ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c);
+          this.step(s.ln, 'check', `WHILE ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c, 'loop');
           if (!c) break;
           const r = this.execBlockOrList(s.body);
           if (r) {
@@ -476,7 +503,7 @@ export class Interp {
           }
           this.ln = s.condLn;
           const c = truthy(this.ev(s.c));
-          this.step(s.condLn, 'check', `WHILE ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c);
+          this.step(s.condLn, 'check', `WHILE ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c, 'loop');
           if (!c) break;
         }
         return undefined;
@@ -501,7 +528,7 @@ export class Interp {
             this.frame.ln = s.ln;
             const c = s.c ? truthy(this.ev(s.c)) : true;
             const head = prefix ? `${prefix} · ` : '';
-            this.step(s.ln, 'check', `${head}CHECK ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c);
+            this.step(s.ln, 'check', `${head}CHECK ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c, 'loop');
             if (!c) break;
             const r = this.execBlockOrList(s.body);
             if (r) {
@@ -916,7 +943,10 @@ export class Interp {
         if (R.arr) this.touches.push({ id: R.arr.id, idx: R.idx!, role: 'compare' });
         if (!this.compareText) {
           const side = (x: { v: Val; label: string }) => (x.label ? `${x.label} (${this.fmt(x.v)})` : this.fmt(x.v));
+          const plainSide = (x: { v: Val; label: string }) => (x.label && x.label !== this.fmt(x.v) ? `${x.label} = ${this.fmt(x.v)}` : this.fmt(x.v));
           this.compareText = `${side(L)} ${op} ${side(R)} → ${truthy(res)}`;
+          this.compareSay = `Is ${plainSide(L)} ${OP_WORDS[op] ?? op} ${plainSide(R)}`;
+          this.compareRes = truthy(res);
           this.compareExpr = e;
         }
       }
@@ -1348,7 +1378,7 @@ export class Interp {
     const lw = arr.lastWrite;
     const stepNo = this.countsOnly ? this.stepCount : this.steps.length;
     if (
-      lw && lw.idx !== idx && stepNo - lw.step <= 3 && !valEq(old, v) &&
+      lw && lw.idx !== idx && stepNo - lw.step <= 1 && !valEq(old, v) &&
       valEq(lw.neu, old) && valEq(v, lw.old) && valEq(arr.items[lw.idx], lw.neu)
     ) {
       this.counts.swaps++;
@@ -1356,6 +1386,7 @@ export class Interp {
       const name = label.replace(/\[[^\]]*\]$/, '');
       const [a, b] = lw.idx < idx ? [lw.idx, idx] : [idx, lw.idx];
       this.swapText = `SWAP ${name}[${a}] ↔ ${name}[${b}]`;
+      this.swapSay = `Swap: ${this.fmt(arr.items[a])} moves to position ${a} and ${this.fmt(arr.items[b])} moves to position ${b}.`;
       arr.lastWrite = undefined;
     } else arr.lastWrite = { idx, old, neu: v, step: stepNo };
   }

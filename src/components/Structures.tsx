@@ -430,6 +430,12 @@ export function MatrixGraphView({ item, names, step }: { item: HeapArr; names: s
           })}
         </svg>
       </div>
+      <div className="legend stage-legend">
+        {visited && <span><i className="locked" /> visited</span>}
+        {cur !== null && <span><i className="current-ring" /> current vertex</span>}
+        {nb !== null && <span><i className="compare" /> neighbor being checked</span>}
+        {dist && <span><b className="dist-key">9</b> shortest distance found so far</span>}
+      </div>
     </div>
   );
 }
