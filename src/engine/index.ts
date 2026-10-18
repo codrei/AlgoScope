@@ -13,7 +13,7 @@ export type { Trace, Step, HeapItem, SnapVal, FrameSnap, Touch } from './trace';
 export type { Lang } from './ir';
 
 const GRAMMAR: Record<Lang, string> = {
-  c: 'cpp',
+  c: 'c',
   cpp: 'cpp',
   java: 'java',
   csharp: 'c_sharp',
@@ -60,6 +60,53 @@ export async function preload(lang: Lang) {
   await languageFor(lang);
 }
 
+/**
+ * The C++ grammar reads "a.b < c" as the start of a template (b<...>). For that pattern
+ * only, parse '<' as '>' (same length and precedence) and remember where, so the
+ * front-end can turn it back into '<'.
+ */
+export function protectComparisons(src: string): { code: string; swapped: Set<number> } {
+  const out = src.split('');
+  const swapped = new Set<number>();
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end < 0 ? n : end + 2;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      i++;
+      while (i < n && src[i] !== c && src[i] !== '\n') i += src[i] === '\\' ? 2 : 1;
+      i++;
+      continue;
+    }
+    if (c === '<' && src[i + 1] !== '<' && src[i + 1] !== '=' && src[i - 1] !== '<') {
+      // walk back over spaces, an identifier, spaces, then expect '.' or '->'
+      let j = i - 1;
+      while (j >= 0 && /\s/.test(src[j])) j--;
+      const idEnd = j;
+      while (j >= 0 && /\w/.test(src[j])) j--;
+      if (idEnd > j && /[A-Za-z_]/.test(src[j + 1])) {
+        const word = src.slice(j + 1, idEnd + 1);
+        while (j >= 0 && /\s/.test(src[j])) j--;
+        if (word !== 'template' && (src[j] === '.' || (src[j] === '>' && src[j - 1] === '-'))) {
+          out[i] = '>';
+          swapped.add(i);
+        }
+      }
+    }
+    i++;
+  }
+  return { code: out.join(''), swapped };
+}
+
 export interface RunResult {
   trace?: Trace;
   compileError?: { msg: string; line: number };
@@ -69,7 +116,8 @@ export async function runCode(lang: Lang, source: string, opts: RunOptions = {})
   const language = await languageFor(lang);
   const parser = new Parser();
   parser.setLanguage(language);
-  const tree = parser.parse(source);
+  const fix = lang === 'cpp' ? protectComparisons(source) : { code: source, swapped: new Set<number>() };
+  const tree = parser.parse(fix.code);
   if (!tree) return { compileError: { msg: 'could not parse the code', line: 1 } };
   try {
     const syn = findSyntaxError(tree.rootNode);
@@ -85,7 +133,7 @@ export async function runCode(lang: Lang, source: string, opts: RunOptions = {})
     switch (lang) {
       case 'c':
       case 'cpp':
-        prog = lowerCFamily(tree.rootNode, lang);
+        prog = lowerCFamily(tree.rootNode, lang, { source, swapped: fix.swapped });
         break;
       case 'java':
         prog = lowerJava(tree.rootNode);

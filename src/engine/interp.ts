@@ -366,9 +366,10 @@ export class Interp {
         queue.push(v.arr);
         return { t: 'ptr', s: `&${v.cell.label()}`, id: v.arr.id, idx: v.idx };
       }
-      if (v.cell instanceof FieldCell) {
-        queue.push(v.cell.obj);
-        return { t: 'ptr', s: `&${v.cell.label()}`, id: v.cell.obj.id };
+      const target = v.cell instanceof VarCell ? v.cell.v : undefined;
+      if (target instanceof Obj) {
+        queue.push(target);
+        return { t: 'ptr', s: `&${v.cell.label()}`, id: target.id };
       }
       return { t: 'ptr', s: `&${v.cell.label()}` };
     }
@@ -1220,7 +1221,8 @@ export class Interp {
           const st = this.findStatic(e.obj.name, e.name);
           if (st) return st;
         }
-        const o = this.ev(e.obj);
+        let o = this.ev(e.obj);
+        if (o instanceof Ptr && !o.arr) o = o.cell.get();
         if (o instanceof Obj) {
           const lbl = this.memberLabel(e);
           return new FieldCell(o, e.name, lbl);
@@ -1426,7 +1428,8 @@ export class Interp {
       const st = this.findStatic(e.obj.name, e.name);
       if (st) return st.get();
     }
-    const o = this.ev(e.obj);
+    let o = this.ev(e.obj);
+    if (o instanceof Ptr && !o.arr) o = o.cell.get();
     if (o instanceof Obj) {
       if (o.fields.has(e.name)) return o.fields.get(e.name);
       const m = this.findMethod(o.cls, e.name, -1);
@@ -1501,7 +1504,8 @@ export class Interp {
           if (m) return this.callUser(m, e.args, this.frame.self);
         }
       }
-      const o = this.ev(c.obj);
+      let o = this.ev(c.obj);
+      if (o instanceof Ptr && !o.arr) o = o.cell.get();
       if (o instanceof Obj) {
         const m = this.findMethod(o.cls, c.name, e.args.length);
         if (m) return this.callUser(m, e.args, m.isStatic ? undefined : o);
@@ -1797,6 +1801,7 @@ export class Interp {
       for (let i = 0; i < n; i++) {
         const sub = list?.[i];
         if (level < sizes.length - 1) items.push(build(level + 1, sub));
+        else if (sub && sub.k === 'list' && sub.kind === 'init') items.push(this.initListFor(base, sub));
         else items.push(sub ? convert(this.ev(sub), base) : this.cDefault(base));
       }
       return new Arr(items, 'array', elemTy);

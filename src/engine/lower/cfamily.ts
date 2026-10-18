@@ -16,8 +16,10 @@ interface Declarator {
   node: Node;
 }
 
-export function lowerCFamily(root: Node, lang: Lang): Program {
+export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swapped: Set<number> }): Program {
   const prog: Program = { lang, funcs: {}, classes: {}, globals: [] };
+  // source text of a node, with any protected '<' restored
+  const txt = (n: Node) => (fix ? fix.source.slice(n.startIndex, n.endIndex) : n.text);
   const typedefs = new Map<string, string>();
 
   // ---------- types ----------
@@ -299,16 +301,16 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
           const inner = alt.type === 'else_clause' ? kids(alt)[0] : alt;
           elseBody = inner ? bodyOf(inner) : [];
         }
-        return [{ k: 'if', ln, c: expr(cn), src: cn.text, then: bodyOf(f(n, 'consequence')), else: elseBody }];
+        return [{ k: 'if', ln, c: expr(cn), src: txt(cn), then: bodyOf(f(n, 'consequence')), else: elseBody }];
       }
       case 'while_statement': {
         const cn = condOf(f(n, 'condition')!);
-        return [{ k: 'while', ln, c: expr(cn), src: cn.text, body: bodyOf(f(n, 'body')) }];
+        return [{ k: 'while', ln, c: expr(cn), src: txt(cn), body: bodyOf(f(n, 'body')) }];
       }
       case 'do_statement': {
         const cnode = f(n, 'condition')!;
         const cn = condOf(cnode);
-        return [{ k: 'dowhile', ln, c: expr(cn), src: cn.text, condLn: lineOf(cnode), body: bodyOf(f(n, 'body')) }];
+        return [{ k: 'dowhile', ln, c: expr(cn), src: txt(cn), condLn: lineOf(cnode), body: bodyOf(f(n, 'body')) }];
       }
       case 'for_statement': {
         const init: Stmt[] = [];
@@ -321,7 +323,7 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
         const c = f(n, 'condition');
         const upd = f(n, 'update');
         const update = upd ? (upd.type === 'comma_expression' ? commaList(upd) : [expr(upd)]) : [];
-        return [{ k: 'for', ln, init, c: c ? expr(c) : undefined, src: c ? c.text : 'true', update, body: bodyOf(f(n, 'body')) }];
+        return [{ k: 'for', ln, init, c: c ? expr(c) : undefined, src: c ? txt(c) : 'true', update, body: bodyOf(f(n, 'body')) }];
       }
       case 'for_range_loop': {
         const t = typeOf(f(n, 'type'));
@@ -502,8 +504,11 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
         return { k: 'this', ln };
       case 'parenthesized_expression':
         return expr(kids(n)[0]);
-      case 'binary_expression':
-        return { k: 'bin', ln, op: f(n, 'operator')!.text, l: expr(f(n, 'left')!), r: expr(f(n, 'right')!) };
+      case 'binary_expression': {
+        const opNode = f(n, 'operator')!;
+        const op = fix?.swapped.has(opNode.startIndex) ? '<' : opNode.text;
+        return { k: 'bin', ln, op, l: expr(f(n, 'left')!), r: expr(f(n, 'right')!) };
+      }
       case 'unary_expression':
         return { k: 'un', ln, op: f(n, 'operator')!.text, e: expr(f(n, 'argument')!) };
       case 'pointer_expression': {

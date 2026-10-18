@@ -471,6 +471,210 @@ print(len(parts), "-".join(p.upper() for p in parts), line.count("o"), line.find
 print(" ".join(reversed(parts)), line.replace("quick", "slow").title())`,
     out: '4 THE-QUICK-BROWN-FOX 2 10\nfox brown quick the The Slow Brown Fox\n',
   },
+  // ------------------------------------------------------------------ round 2
+  {
+    name: 'char output, long long, auto loop',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <vector>
+using namespace std;
+int main() {
+    long long big = 1;
+    for (int i = 0; i < 20; i++) big *= 2;
+    vector<char> letters = {'a', 'b', 'c'};
+    for (auto c : letters) cout << c << ' ';
+    cout << '\\n' << big << "\\n";
+    return 0;
+}`,
+    out: 'a b c \n1048576\n',
+  },
+  {
+    name: 'getline and string compare',
+    lang: 'cpp',
+    stdin: 'Ada Lovelace\n',
+    code: `#include <iostream>
+#include <string>
+using namespace std;
+int main() {
+    string name;
+    getline(cin, name);
+    if (name == "Ada Lovelace") cout << "Hi " << name.substr(0, 3) << "! " << name.length() << endl;
+    return 0;
+}`,
+    out: 'Hi Ada! 12\n',
+  },
+  {
+    name: 'char arithmetic and ternary',
+    lang: 'java',
+    code: `public class Main {
+    public static void main(String[] args) {
+        String s = "Hello";
+        int upper = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 'A' && c <= 'Z') upper++;
+        }
+        char next = (char) ('a' + 1);
+        System.out.println(upper + " " + next + " " + (7 % 2 == 0 ? "even" : "odd") + " " + Math.floor(7.8) + " " + Math.abs(-3));
+    }
+}`,
+    out: '1 b odd 7.0 3\n',
+  },
+  {
+    name: 'ArrayList of objects and enhanced for',
+    lang: 'java',
+    code: `import java.util.ArrayList;
+public class Main {
+    static class Item {
+        String name;
+        int price;
+        Item(String name, int price) { this.name = name; this.price = price; }
+    }
+    public static void main(String[] args) {
+        ArrayList<Item> cart = new ArrayList<>();
+        cart.add(new Item("pen", 10));
+        cart.add(new Item("book", 120));
+        int total = 0;
+        for (Item it : cart) total += it.price;
+        System.out.println(cart.size() + " items, total " + total + ", first " + cart.get(0).name);
+    }
+}`,
+    out: '2 items, total 130, first pen\n',
+  },
+  {
+    name: 'string.Format, Math, nested loops',
+    lang: 'csharp',
+    code: `using System;
+class Program {
+    static void Main() {
+        for (int i = 1; i <= 3; i++) {
+            for (int j = 1; j <= i; j++) Console.Write("*");
+            Console.WriteLine();
+        }
+        Console.WriteLine(string.Format("{0:F2} {1}", Math.Sqrt(2), Math.Pow(2, 10)));
+    }
+}`,
+    out: '*\n**\n***\n1.41 1024\n',
+  },
+  {
+    name: 'C# struct-like class array and ref param',
+    lang: 'csharp',
+    code: `using System;
+class Program {
+    static void Swap(ref int a, ref int b) { int t = a; a = b; b = t; }
+    static void Main() {
+        int[] arr = { 3, 9 };
+        Swap(ref arr[0], ref arr[1]);
+        Console.WriteLine($"{arr[0]} {arr[1]}");
+    }
+}`,
+    out: '9 3\n',
+  },
+  {
+    name: 'while True with break, negative range, sort, swap',
+    lang: 'python',
+    code: `arr = [4, 2, 7]
+i = 0
+while True:
+    i += 1
+    if i > 3:
+        break
+for k in range(len(arr) - 1, -1, -1):
+    print(arr[k], end=" ")
+print()
+arr.sort()
+a, b = 1, 2
+a, b = b, a
+print(arr, a, b, i, max(arr), min(arr), sum(arr))`,
+    out: '7 2 4 \n[2, 4, 7] 2 1 4 7 2 13\n',
+  },
+  {
+    name: '2D list and nested function',
+    lang: 'python',
+    code: `grid = [[0] * 3 for _ in range(2)]
+grid[1][2] = 5
+
+def total(g):
+    def row_sum(r):
+        return sum(r)
+    return sum(row_sum(r) for r in g)
+
+print(grid, total(grid), len(grid[0]))`,
+    out: '[[0, 0, 0], [0, 0, 5]] 5 3\n',
+  },
+  {
+    name: 'C global struct array and sorting structs',
+    lang: 'c',
+    code: `#include <stdio.h>
+struct Student {
+    char name[10];
+    int score;
+};
+int main() {
+    struct Student s[3] = {{"Ana", 80}, {"Ben", 95}, {"Cy", 70}};
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2 - i; j++) {
+            if (s[j].score < s[j + 1].score) {
+                struct Student t = s[j];
+                s[j] = s[j + 1];
+                s[j + 1] = t;
+            }
+        }
+    }
+    for (int i = 0; i < 3; i++) printf("%s %d\\n", s[i].name, s[i].score);
+    return 0;
+}`,
+    out: 'Ben 95\nAna 80\nCy 70\n',
+  },
+{
+    name: 'member comparisons that look like templates',
+    lang: 'cpp',
+    code: `#include <iostream>
+#include <vector>
+using namespace std;
+struct P { int x; int y; };
+struct Node { int data; Node* next; };
+int main() {
+    P a = {1, 5}, b = {2, 3};
+    vector<P> pts = {a, b};
+    int c = 0;
+    if (a.x < b.x) c++;
+    if (pts[0].y < pts[1].y) c += 10;
+    if (a.x < b.x && a.y > b.y) c += 100;
+    Node n2 = {7, nullptr};
+    Node n1 = {3, &n2};
+    Node* cur = &n1;
+    while (cur->next != nullptr && cur->next->data < 10) cur = cur->next;
+    cout << c << " " << cur->data << endl;
+    return 0;
+}`,
+    out: '101 7\n',
+  },
+  {
+    name: 'member comparisons in Java and C#',
+    lang: 'java',
+    code: `public class Main {
+    static class P { int x; P(int x) { this.x = x; } }
+    public static void main(String[] args) {
+        P[] ps = { new P(3), new P(1) };
+        if (ps[1].x < ps[0].x) System.out.println("ok");
+    }
+}`,
+    out: 'ok\n',
+  },
+  {
+    name: 'member comparisons in C#',
+    lang: 'csharp',
+    code: `using System;
+class P { public int x; public P(int x) { this.x = x; } }
+class Program {
+    static void Main() {
+        P[] ps = { new P(3), new P(1) };
+        if (ps[1].x < ps[0].x) Console.WriteLine("ok");
+    }
+}`,
+    out: 'ok\n',
+  },
 ];
 
 describe('student-style programs', () => {
