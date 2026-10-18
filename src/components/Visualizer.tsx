@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
 import { lockedCells, structuresFor, type LockInfo } from '../lib/analysis';
 import { ArrayView, cellText } from './ArrayView';
-import { GraphView, Grid2D, MapView } from './Structures';
+import { GraphView, Grid2D, isAdjacencyMatrix, MapView, MatrixGraphView } from './Structures';
 
 export interface HeaderInfo {
   eyebrow: string;
@@ -82,7 +82,14 @@ function Stage({ step, prev, stepIndex, locks, isLast }: { step: Step; prev?: St
     if (a.item.kind !== 'arr') continue;
     const is2D = a.item.items.length > 0 && a.item.items.every((v) => v.t === 'null' || (v.t === 'r' && step.heap[v.id]?.kind === 'arr')) && a.item.items.some((v) => v.t === 'r');
     if (is2D) {
-      views.push(<Grid2D key={a.id} item={a.item} names={a.names} step={step} />);
+      if (isAdjacencyMatrix(a.names, a.item, step)) {
+        views.push(
+          <div className="graph-pair" key={a.id}>
+            <MatrixGraphView item={a.item} names={a.names} step={step} />
+            <Grid2D item={a.item} names={a.names} step={step} />
+          </div>,
+        );
+      } else views.push(<Grid2D key={a.id} item={a.item} names={a.names} step={step} />);
       continue;
     }
     const info = locks.get(a.id);

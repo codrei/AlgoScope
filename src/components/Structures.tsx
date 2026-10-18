@@ -301,3 +301,134 @@ export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; root
     </div>
   );
 }
+
+// ---------------------------------------------------------------- graph from an adjacency matrix
+
+const CURRENT_NAMES = ['node', 'u', 'current', 'cur', 'curr', 'vertex'];
+const NEIGHBOR_NAMES = ['neighbor', 'neighbour', 'v', 'next', 'nbr', 'adj', 'w'];
+
+/** A square numeric matrix named like a graph (graph, adj, matrix...). */
+export function isAdjacencyMatrix(names: string[], item: HeapArr, step: Step): boolean {
+  if (!names.some((n) => /graph|adj|matrix|^g$|edges/i.test(n))) return false;
+  const n = item.items.length;
+  if (n < 2 || n > 12) return false;
+  return item.items.every((v) => {
+    if (v.t !== 'r') return false;
+    const row = step.heap[v.id];
+    return row?.kind === 'arr' && row.items.length === n && row.items.every((x) => x.t === 'p' && x.n !== undefined);
+  });
+}
+
+export function MatrixGraphView({ item, names, step }: { item: HeapArr; names: string[]; step: Step }) {
+  const n = item.items.length;
+  const m: number[][] = item.items.map((v) => {
+    const row = step.heap[(v as { id: number }).id] as HeapArr;
+    return row.items.map((x) => (x.t === 'p' ? x.n ?? 0 : 0));
+  });
+  const weighted = m.some((r) => r.some((x) => x > 1));
+  const directed = m.some((r, i) => r.some((x, j) => x !== m[j][i]));
+
+  // helper arrays and variables, searched from the innermost frame outwards
+  const frames = [...step.frames].reverse();
+  const findArr = (re: RegExp): SnapVal[] | null => {
+    for (const f of frames) {
+      for (const [name, v] of f.vars) {
+        if (!re.test(name) || v.t !== 'r') continue;
+        const h = step.heap[v.id];
+        if (h?.kind === 'arr' && h.items.length === n) return h.items;
+      }
+    }
+    return null;
+  };
+  const findInt = (names: string[]): number | null => {
+    const f = step.frames[step.frames.length - 1];
+    for (const [name, v] of f.vars) {
+      if (names.includes(name) && v.t === 'p' && v.n !== undefined && Number.isInteger(v.n) && v.n >= 0 && v.n < n) return v.n;
+    }
+    return null;
+  };
+  const visited = findArr(/^(visited|seen|vis|done|marked)$/i);
+  const dist = findArr(/^(dist|distance|distances|d)$/i);
+  const cur = findInt(CURRENT_NAMES);
+  const nb = findInt(NEIGHBOR_NAMES);
+
+  const size = 300;
+  const R = 118;
+  const cx = size / 2 + 20;
+  const cy = size / 2 + 6;
+  const pos = Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    return { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
+  });
+  const isOn = (v: SnapVal | undefined) => !!v && v.t === 'p' && (v.n ?? 0) !== 0 && v.s !== 'false' && v.s !== 'False';
+  const edges: { a: number; b: number; w: number }[] = [];
+  for (let i = 0; i < n; i++) for (let j = directed ? 0 : i + 1; j < n; j++) if (m[i][j] && i !== j) edges.push({ a: i, b: j, w: m[i][j] });
+  const nodeR = 19;
+
+  return (
+    <div className="struct">
+      <div className="struct-label">
+        <b>{names.join(' = ')}</b>
+        <span className="kind">graph</span>
+        <span>{n} vertices · {edges.length} edges</span>
+      </div>
+      <div className="graph-wrap">
+        <svg className="graph-svg" width={size + 40} height={size + (dist ? 30 : 12)} role="img" aria-label="graph">
+          <defs>
+            <marker id="garrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--text-3)" />
+            </marker>
+          </defs>
+          {edges.map((e, k) => {
+            const p = pos[e.a];
+            const q = pos[e.b];
+            const hot = cur !== null && nb !== null && ((e.a === cur && e.b === nb) || (!directed && e.b === cur && e.a === nb));
+            const dx = q.x - p.x;
+            const dy = q.y - p.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const x1 = p.x + (dx / len) * nodeR;
+            const y1 = p.y + (dy / len) * nodeR;
+            const x2 = q.x - (dx / len) * nodeR;
+            const y2 = q.y - (dy / len) * nodeR;
+            return (
+              <g key={k}>
+                <line
+                  x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke={hot ? 'var(--compare)' : 'var(--cell-border)'}
+                  strokeWidth={hot ? 4 : 2}
+                  markerEnd={directed ? 'url(#garrow)' : undefined}
+                />
+                {weighted && (
+                  <g transform={`translate(${(p.x + q.x) / 2},${(p.y + q.y) / 2})`}>
+                    <rect x={-11} y={-9} width={22} height={17} rx={4} fill="var(--surface)" stroke="var(--border)" />
+                    <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="var(--text-2)">{e.w}</text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+          {pos.map((p, i) => {
+            const vis = visited ? isOn(visited[i]) : false;
+            const isCur = i === cur;
+            const isNb = i === nb && !isCur;
+            const fill = vis ? 'var(--locked-bg)' : isNb ? 'var(--compare-bg)' : 'var(--cell-bg)';
+            const stroke = isCur ? 'var(--nu-gold)' : vis ? 'var(--locked-bg)' : isNb ? 'var(--compare)' : 'var(--cell-border)';
+            const d = dist?.[i];
+            return (
+              <g key={i} transform={`translate(${p.x},${p.y})`}>
+                {isCur && <circle r={nodeR + 6} fill="none" stroke="var(--nu-gold)" strokeWidth={3} opacity={0.6} />}
+                <circle r={nodeR} fill={fill} stroke={stroke} strokeWidth={isCur ? 4 : 2.5} />
+                <text textAnchor="middle" y={5} fontSize={15} fontWeight={800} fill={vis ? '#fff' : 'var(--text)'}>{i}</text>
+                {d && (
+                  <text textAnchor="middle" y={nodeR + 15} fontSize={11.5} fontWeight={700} fill="var(--nu-gold-text)">
+                    {cellText(d)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}

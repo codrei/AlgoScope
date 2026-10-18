@@ -1,4 +1,6 @@
 import { bubbleSort, insertionSort, mergeSort, quickSort, selectionSort } from './sorting';
+import { fibDp, knapsack, lcs } from './dp';
+import { bfs, dfs, dijkstra } from './graphs';
 import { factorial, fibonacci, hanoi } from './recursion';
 import { binarySearch, linearSearch } from './searching';
 import { balancedParens, bst, linkedList, queueArray, stackArray } from './structures';
@@ -22,4 +24,10 @@ export const EXAMPLES: Example[] = [
   balancedParens,
   linkedList,
   bst,
+  fibDp,
+  knapsack,
+  lcs,
+  bfs,
+  dfs,
+  dijkstra,
 ];

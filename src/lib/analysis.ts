@@ -50,8 +50,11 @@ function findFinal(trace: Trace, id: number): HeapArr | undefined {
 }
 
 function isSorted(items: SnapVal[]): boolean {
+  // only real number arrays (not true/false flags) with a few different values
+  if (items.some((v) => v.t !== 'p' || /^(true|false)$/i.test(v.s))) return false;
   const nums = items.map((v) => (v.t === 'p' && v.n !== undefined ? v.n : NaN));
   if (nums.some((x) => Number.isNaN(x))) return false;
+  if (new Set(nums).size < 3) return false;
   let asc = true;
   let desc = true;
   for (let i = 1; i < nums.length; i++) {

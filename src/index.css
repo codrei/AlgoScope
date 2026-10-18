@@ -806,6 +806,14 @@ input {
   background: var(--surface-2);
 }
 
+/* graph drawing next to its adjacency matrix */
+.graph-pair {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
 /* object graph */
 .graph-wrap {
   overflow: auto;
