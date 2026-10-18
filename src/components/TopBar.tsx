@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function TopBar(p: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).get('menu') === '1');
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -56,7 +56,7 @@ export function TopBar(p: Props) {
       </div>
       <div className="menu-wrap" ref={wrap}>
         <button className="topbar-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu">
-          <BookOpen size={16} /> <span className="label">{current ? current.title : 'Examples'}</span> <ChevronDown size={15} />
+          <BookOpen size={16} /> <span className="label keep">{current ? current.title : 'Examples'}</span> <ChevronDown size={15} />
         </button>
         {open && (
           <div className="menu" role="menu">
