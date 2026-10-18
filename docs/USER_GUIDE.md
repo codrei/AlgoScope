@@ -145,13 +145,20 @@ elements) for animations, and the Complexity Lab for bigger sizes.
 
 | Topic | Examples |
 |---|---|
+| Algorithm Analysis | Euclid's GCD, Growth Rates (counting the steps of O(1), O(log n), O(n), O(n²) loops) |
 | Sorting | Bubble, Selection, Insertion, Merge, Quick, Heap, Counting Sort |
 | Searching | Linear Search, Binary Search, String Matching (brute force) |
-| Recursion | Factorial, Fibonacci (recursive), Tower of Hanoi |
-| Data Structures | Stack (array), Stack Using a Struct (C), Queue (circular array), Queue and Circular Queue (C), Balanced Parentheses, Linked List (insert & reverse), Linked List (insert, find, delete; C++), Binary Search Tree, Hash Table (linear probing), Maze Game (2D array; Turbo C++) |
-| Dynamic Programming | Fibonacci (DP table), 0/1 Knapsack, Longest Common Subsequence |
-| Graphs | BFS, DFS, Dijkstra's Shortest Path, Topological Sort, Prim's Minimum Spanning Tree, Floyd–Warshall |
-| Greedy & Backtracking | N-Queens, Coin Change (greedy), Activity Selection |
+| Recursion | Factorial, Fibonacci (recursive), Tower of Hanoi, Fast Power (divide and conquer) |
+| Data Structures | Array Insert and Delete, Stack (array), Stack Using a Struct (C), Queue (circular array), Queue and Circular Queue (C), Balanced Parentheses, Infix to Postfix, Linked List (insert & reverse), Linked List (insert, find, delete; C++), Doubly Linked List, Hash Table (linear probing), Maze Game (2D array; Turbo C++) |
+| Trees & Heaps | Binary Search Tree, Tree Traversals (pre/in/post/level order), Min-Heap (priority queue) |
+| Dynamic Programming | Fibonacci (DP table), 0/1 Knapsack, Longest Common Subsequence, Coin Change (DP) |
+| Graphs | BFS, DFS, Dijkstra's Shortest Path, Topological Sort, Prim's and Kruskal's Minimum Spanning Tree, Floyd–Warshall |
+| Greedy & Backtracking | N-Queens, Coin Change (greedy), Activity Selection, Fractional Knapsack, Permutations |
+| Hard Problems (NP) | Travelling Salesman (brute force), Subset Sum (brute force) |
+
+Good pairs to compare in class: Coin Change greedy vs. DP (greedy uses 3 coins for 6, DP finds 2), Fractional vs. 0/1
+Knapsack, Prim vs. Kruskal (same tree, different order), recursive vs. DP Fibonacci, and the NP examples to show how
+n! and 2ⁿ grow.
 
 Examples marked with a language (C, C++) exist only in that language, the way they appear on the course slides.
 Every other example runs in all five languages and prints the same output.

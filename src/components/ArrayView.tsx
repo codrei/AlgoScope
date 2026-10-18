@@ -30,7 +30,8 @@ function sizing(n: number, maxLen: number, big: boolean) {
   else if (n > 16) cell = 38;
   else if (n > 10) cell = 46;
   let font = cell >= 72 ? 27 : cell >= 62 ? 23 : cell >= 56 ? 20 : cell >= 46 ? 17 : cell >= 38 ? 14 : 12;
-  if (maxLen > 3) font = Math.max(10, font - (maxLen - 3) * 2.2);
+  // keep long values (False, 1000, 'hello') inside the box: about 0.62em per character
+  if (maxLen > 3) font = Math.max(10, Math.min(font - (maxLen - 3) * 2.2, (cell - 10) / (maxLen * 0.62)));
   const gap = cell >= 46 ? 12 : 6;
   return { cell, font, gap };
 }

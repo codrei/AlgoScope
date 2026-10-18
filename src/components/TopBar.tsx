@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
 
 const LANG_LABEL = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' } as const;
-const TOPICS: Topic[] = ['Sorting', 'Searching', 'Recursion', 'Data Structures', 'Dynamic Programming', 'Graphs', 'Greedy & Backtracking'];
+const TOPICS: Topic[] = [
+  'Algorithm Analysis', 'Sorting', 'Searching', 'Recursion', 'Data Structures', 'Trees & Heaps',
+  'Dynamic Programming', 'Graphs', 'Greedy & Backtracking', 'Hard Problems (NP)',
+];
 
 export function BrandMark() {
   return (

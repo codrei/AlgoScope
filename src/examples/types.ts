@@ -1,6 +1,8 @@
 import type { Lang } from '../engine/ir';
 
-export type Topic = 'Sorting' | 'Searching' | 'Recursion' | 'Data Structures' | 'Dynamic Programming' | 'Graphs' | 'Greedy & Backtracking';
+export type Topic =
+  | 'Algorithm Analysis' | 'Sorting' | 'Searching' | 'Recursion' | 'Data Structures' | 'Trees & Heaps'
+  | 'Dynamic Programming' | 'Graphs' | 'Greedy & Backtracking' | 'Hard Problems (NP)';
 
 export interface Example {
   id: string;

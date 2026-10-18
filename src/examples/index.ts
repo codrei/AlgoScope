@@ -1,7 +1,11 @@
 import { bubbleSort, insertionSort, mergeSort, quickSort, selectionSort } from './sorting';
 import { fibDp, knapsack, lcs } from './dp';
 import { linkedListClass, mazeGame, queueStruct, stackStruct } from './lessons';
-import { activitySelection, coinChange, countingSort, floydWarshall, hashTable, heapSort, nQueens, primMst, stringMatching, topologicalSort } from './more';
+import {
+  activitySelection, arrayOperations, coinChange, coinChangeDp, countingSort, doublyLinkedList, fastPower, floydWarshall,
+  fractionalKnapsack, gcd, growthRates, hashTable, heapSort, infixToPostfix, kruskalMst, minHeap, nQueens, permutations,
+  primMst, stringMatching, subsetSum, topologicalSort, treeTraversals, tspBruteForce,
+} from './more';
 import { bfs, dfs, dijkstra } from './graphs';
 import { factorial, fibonacci, hanoi } from './recursion';
 import { binarySearch, linearSearch } from './searching';
@@ -11,6 +15,8 @@ import type { Example } from './types';
 export type { Example, Topic } from './types';
 
 export const EXAMPLES: Example[] = [
+  gcd,
+  growthRates,
   bubbleSort,
   selectionSort,
   insertionSort,
@@ -24,26 +30,38 @@ export const EXAMPLES: Example[] = [
   factorial,
   fibonacci,
   hanoi,
+  fastPower,
+  arrayOperations,
   stackArray,
   stackStruct,
   queueArray,
   queueStruct,
   balancedParens,
+  infixToPostfix,
   linkedList,
   linkedListClass,
+  doublyLinkedList,
   bst,
+  treeTraversals,
+  minHeap,
   hashTable,
   mazeGame,
   fibDp,
   knapsack,
   lcs,
+  coinChangeDp,
   bfs,
   dfs,
   dijkstra,
   topologicalSort,
   primMst,
+  kruskalMst,
   floydWarshall,
   nQueens,
   coinChange,
   activitySelection,
+  fractionalKnapsack,
+  permutations,
+  tspBruteForce,
+  subsetSum,
 ];

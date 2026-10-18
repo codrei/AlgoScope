@@ -244,10 +244,23 @@ export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; root
     });
   });
 
+  // doubly linked lists: prev links curve back underneath the nodes
+  const backEdges: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  if (!isTree) {
+    nodes.forEach((n) => {
+      for (const [f, v] of n.obj.fields) {
+        if (!BACK_FIELDS.has(f.toLowerCase()) || (v.t !== 'r' && v.t !== 'ptr') || v.id === undefined) continue;
+        const t = nodes.get(v.id);
+        if (t && t.y === n.y && t.x < n.x) backEdges.push({ x1: n.x + 14, y1: n.y + NODE_H, x2: t.x + t.w - 40, y2: t.y + NODE_H });
+      }
+    });
+  }
+  if (backEdges.length) height += 14;
+
   return (
     <div className="struct">
       <div className="struct-label">
-        <b>{isTree ? 'tree' : 'linked nodes'}</b>
+        <b>{isTree ? 'tree' : backEdges.length ? 'doubly linked nodes' : 'linked nodes'}</b>
         <span className="kind">{[...new Set([...objs.values()].map((o) => o.cls))].join(', ')}</span>
         <span>{objs.size} node{objs.size === 1 ? '' : 's'}</span>
       </div>
@@ -268,6 +281,11 @@ export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; root
               <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="var(--text-2)" strokeWidth={2} markerEnd="url(#arrow)" />
             ),
           )}
+          {backEdges.map((e, i) => (
+            <path key={`b${i}`} d={`M${e.x1},${e.y1} C${e.x1},${e.y1 + 26} ${e.x2},${e.y2 + 26} ${e.x2},${e.y2 + 2}`} fill="none" stroke="var(--text-3)" strokeWidth={1.6} strokeDasharray="4 3" markerEnd="url(#arrow)">
+              <title>prev</title>
+            </path>
+          ))}
           {[...nodes.values()].map((n) => (
             <g key={n.id} transform={`translate(${n.x},${n.y})`}>
               <rect

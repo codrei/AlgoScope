@@ -269,6 +269,94 @@ const CAPTIONS: Record<string, CaptionFn> = {
     if (!c.inFn('selectActivities') || i === undefined || last === undefined) return null;
     return `Activity ${i} starts at ${c.arr('start', i) ?? '?'}; the last chosen activity ends at ${c.arr('finish', last) ?? '?'}. Take it only if it does not overlap.`;
   },
+  gcd: (c) => {
+    const a = c.num('a');
+    const b = c.num('b');
+    if (!c.inFn('gcd') || a === undefined || b === undefined) return null;
+    return b === 0 ? `The remainder is 0, so the answer is ${a}.` : 'Divide a by b and keep the remainder. Then repeat with (b, remainder): gcd(a, b) = gcd(b, a % b).';
+  },
+  'growth-rates': (c) => {
+    const n = c.num('n');
+    const steps = c.num('steps');
+    for (const [fn, label] of [['constant', 'O(1): one step, whatever n is'], ['logarithmic', 'O(log n): i doubles each time, so few steps'], ['linear', 'O(n): one step per element'], ['quadratic', 'O(n²): n steps for each of the n rows']] as const) {
+      if (c.inFn(fn)) return `${label} (n = ${n}, ${steps ?? 0} so far).`;
+    }
+    return null;
+  },
+  'fast-power': (c) => {
+    const x = c.num('x');
+    const n = c.num('n');
+    if (!c.inFn('power') || n === undefined) return null;
+    return n === 0 ? `Base case: ${x}^0 = 1.` : `${x}^${n} = (${x}^${Math.floor(n / 2)})²${n % 2 ? ` × ${x}` : ''}: solve the half once and square it.`;
+  },
+  'array-operations': (c) => {
+    if (c.inFn('insertAt')) return `Insert ${c.num('value')} at position ${c.num('pos')}: shift the elements from the end one place right to open a gap.`;
+    if (c.inFn('deleteAt')) return `Delete position ${c.num('pos')}: shift the later elements one place left to close the gap.`;
+    return null;
+  },
+  'doubly-linked-list': (c) => {
+    if (c.inFn('insertEnd')) return `Add ${c.num('data') ?? ''} after the tail: link it both ways (tail.next and node.prev).`;
+    if (c.inFn('deleteValue')) return `Delete ${c.num('data') ?? ''}: find it, then link its previous and next nodes to each other.`;
+    if (c.inFn('printForward')) return 'Walk forward from head using next.';
+    if (c.inFn('printBackward')) return 'Walk backward from tail using prev.';
+    return null;
+  },
+  'infix-to-postfix': (c) => {
+    if (c.inFn('precedence')) return '* and / bind tighter (2) than + and - (1).';
+    if (!c.inFn('toPostfix')) return null;
+    const ch = unq(c.str('c'));
+    if (!ch) return 'Read the expression left to right.';
+    if (/[A-Z]/.test(ch)) return `${ch} is an operand: write it to the output.`;
+    if (ch === '(') return '( waits on the stack until its ) arrives.';
+    if (ch === ')') return ') pops operators to the output until the matching (.';
+    return `${ch} is an operator: first pop the operators on the stack that bind at least as tightly.`;
+  },
+  'tree-traversals': (c) => {
+    if (c.inFn('preorder')) return 'Preorder: print the node first, then visit its left and right subtrees.';
+    if (c.inFn('inorder')) return 'Inorder: visit the left subtree, print the node, then the right subtree.';
+    if (c.inFn('postorder')) return 'Postorder: visit both subtrees first, print the node last.';
+    if (c.inFn('levelOrder')) return 'Level order: take the node at the front of the queue, print it, and add its children to the back.';
+    return null;
+  },
+  'min-heap': (c) => {
+    if (c.inFn('insert')) return `Insert ${c.num('value') ?? ''}: put it at the end, then swap it with its parent while it is smaller.`;
+    if (c.inFn('extractMin')) return 'Remove the root (the smallest). Move the last value to the root and let it sink below its smaller child.';
+    return null;
+  },
+  'coin-change-dp': (c) => {
+    const a = c.num('a');
+    if (!c.inFn('minCoins') || a === undefined) return null;
+    return `Amount ${a}: for each coin, try it as the last coin: 1 + dp[${a} - coin]. Keep the smallest.`;
+  },
+  'kruskal-mst': (c) => {
+    if (c.inFn('find')) return 'Find: follow parent links up to the leader of the group.';
+    const i = c.num('i');
+    if (!c.inFn('kruskal') || i === undefined) return c.inFn('kruskal') ? 'Every vertex starts in its own group.' : null;
+    return `Next cheapest edge (#${i}): keep it only if its two ends are in different groups, otherwise it would make a cycle.`;
+  },
+  'fractional-knapsack': (c) => {
+    const i = c.num('i');
+    const cap = c.num('capacity');
+    if (!c.inFn('knapsack') || i === undefined) return null;
+    return `Item ${i} (best value per kg left), ${cap} kg of space left: take all of it if it fits, otherwise the part that fits.`;
+  },
+  permutations: (c) => {
+    const start = c.num('start');
+    if (!c.inFn('permute') || start === undefined) return null;
+    return `Choose the letter for position ${start}, arrange the rest, then swap back to try the next letter.`;
+  },
+  'tsp-brute-force': (c) => {
+    const count = c.num('count');
+    const city = c.num('city');
+    if (!c.inFn('tour') || count === undefined) return null;
+    return count === 4 ? `All cities visited: add the trip back to city 0 and compare with the best tour so far.` : `At city ${city} with ${count} of 4 cities visited: try every unvisited city next. Brute force tries all (n-1)! orders.`;
+  },
+  'subset-sum': (c) => {
+    const mask = c.num('mask');
+    if (mask === undefined) return null;
+    const bits = mask.toString(2).padStart(6, '0').split('').reverse().join('');
+    return `Subset #${mask + 1} of 64. Bits ${bits}: a 1 means take the number in that position. Brute force tries all 2ⁿ subsets.`;
+  },
 };
 
 /** The algorithm-level caption for a step of a built-in example (or null). */

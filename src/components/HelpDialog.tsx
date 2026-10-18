@@ -19,7 +19,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>1. Write or pick code</h3>
         <ul>
           <li>Choose a language tab above the editor.</li>
-          <li>Open <b>Examples</b> for ready-made sorting, searching, recursion, data structure, dynamic programming, graph, greedy and backtracking algorithms. Most run in all five languages; a few written for one language (for example the Turbo C++ maze game) are marked <i>C only</i> or <i>C++ only</i>.</li>
+          <li>Open <b>Examples</b> for ready-made examples from algorithm analysis, sorting, searching, recursion, data structures, trees and heaps, dynamic programming, graphs, greedy and backtracking, and NP-hard problems. Most run in all five languages; a few written for one language (for example the Turbo C++ maze game) are marked <i>C only</i> or <i>C++ only</i>.</li>
           <li>Or type / paste your own program. If it has no <code>main()</code> (like a function copied from a slide), press <b>Add a main() for me</b> and AlgoScope calls it with sample values.</li>
           <li>Code pasted from slides runs as written: curly quotes, <code>main()</code> without <code>int</code>, Turbo C++ headers and <code>void main</code>, and Python 2 <code>print x</code>. A yellow note says what was adjusted.</li>
         </ul>

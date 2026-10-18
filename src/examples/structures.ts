@@ -884,7 +884,7 @@ print_list(head)
 export const bst: Example = {
   id: 'binary-search-tree',
   title: 'Binary Search Tree',
-  topic: 'Data Structures',
+  topic: 'Trees & Heaps',
   description: 'Smaller keys go left, larger keys go right. Inserting walks down from the root; an inorder traversal (left, node, right) prints the keys in sorted order.',
   time: 'O(h)',
   space: 'O(n)',

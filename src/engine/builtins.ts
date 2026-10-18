@@ -1,6 +1,6 @@
 // Standard-library functions, methods and constants for the five languages.
 import type { Expr, Ty } from './ir';
-import { csFormat, printf, pyRepr, pyStr, toText } from './format';
+import { csFormat, csFormatItem, printf, pyRepr, pyStr, toText } from './format';
 import type { Interp } from './interp';
 import { cmpVals, convert, ElemCell } from './interp';
 import { Arr, Chr, Flt, FnV, Iter, MapV, Obj, RangeV, Special, isNumeric, keyOf, num, truthy, typeName, valEq, type ArrKind, type Val } from './values';
@@ -1000,7 +1000,11 @@ export function callMethod(I: Interp, o: Val, name: string, args: Expr[], objExp
   if (o instanceof Chr && I.lang === 'cpp') return NF;
   if (isNumeric(o) || typeof o === 'boolean') {
     switch (name) {
-      case 'ToString': case 'toString': return toText(o, I.lang);
+      case 'ToString': case 'toString': {
+        // C#: x.ToString("F2"), x.ToString("N0")
+        const f = args.length ? vals(I, args)[0] : undefined;
+        return typeof f === 'string' && I.lang === 'csharp' ? csFormatItem(o, f) : toText(o, I.lang);
+      }
       case 'equals': case 'Equals': return valEq(o, vals(I, args)[0]);
       case 'compareTo': case 'CompareTo': return Math.sign(num(o) - num(vals(I, args)[0]));
       case 'intValue': return Math.trunc(num(o));

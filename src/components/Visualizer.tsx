@@ -197,11 +197,16 @@ function Stage(p: {
     // heap sort / priority queues: also draw the array as the tree it represents
     const inHeapFn = step.frames.some((f) => /heap|sift|percolate/i.test(f.name));
     const worked = step.touches.some((t) => t.id === a.id) || step.frames[step.frames.length - 1]?.vars.some(([, v]) => v.t === 'r' && v.id === a.id);
-    const asHeap = (a.item.heap || (inHeapFn && worked)) && a.item.items.every((v) => v.t === 'p');
+    // an array called heap / minHeap / pq is a heap wherever it is used
+    const namedHeap = a.names.some((n) => /^(heap|minHeap|maxHeap|min_heap|max_heap|pq)$/i.test(n));
+    const asHeap = (a.item.heap || namedHeap || (inHeapFn && worked)) && a.item.items.every((v) => v.t === 'p');
     let heapSize = a.item.items.length;
     if (asHeap && !a.item.heap) {
+      const isSize = (v: SnapVal) => v.t === 'p' && v.n !== undefined && Number.isInteger(v.n) && v.n <= heapSize;
       const cur = step.frames[step.frames.length - 1];
-      const sizeVar = cur?.vars.find(([n, v]) => /^(n|size|heapSize|heap_size|heapsize|len|length|count)$/.test(n) && v.t === 'p' && v.n !== undefined && Number.isInteger(v.n));
+      let sizeVar = cur?.vars.find(([n, v]) => /^(n|size|heapSize|heap_size|heapsize|len|length|count)$/.test(n) && isSize(v));
+      // a global heapSize next to a global heap array
+      if (!sizeVar && namedHeap) sizeVar = step.frames.flatMap((f) => f.vars).find(([n, v]) => /^(heapSize|heap_size|heapsize|size|count)$/.test(n) && isSize(v));
       if (sizeVar && sizeVar[1].t === 'p') heapSize = sizeVar[1].n as number;
     }
     // in heap code left/right are children, not a range: fade the sorted tail instead
