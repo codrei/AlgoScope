@@ -108,7 +108,7 @@ under the picture, and the screen changes are key steps. `getch()` reads one key
 can write arrow keys and other special keys as `<up> <down> <left> <right> <enter> <esc>`. Colors (`textcolor`) are
 ignored.
 
-**Structs that hold an array**, like the lessons' `STACK` with `items[]` and `top` or `QUEUE` with `front` and
+**Structs that hold an array**, like the slides' `STACK` with `items[]` and `top` or `QUEUE` with `front` and
 `rear`, are drawn as the array with `top` / `front` / `rear` marked, and the slots outside the stack or queue are
 greyed out. In heap sort the array is also drawn as a tree.
 

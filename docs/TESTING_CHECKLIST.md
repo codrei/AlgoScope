@@ -66,5 +66,5 @@ That's how we find unsupported features before the professor does.
 - **Does it work without internet?** Yes, after the first visit the browser keeps a copy of the app.
 - **How do you know it's correct?** 45 typical lecture programs and 12 programs from the course
   lessons print exactly what the real compilers (gcc, g++, javac, .NET, CPython) print. Together with the engine
-  tests (244 in all) and 17 click-through interface tests, they run on every example in every language before each
+  tests (288 in all) and 17 click-through interface tests, they run on every example in every language before each
   update is published.
