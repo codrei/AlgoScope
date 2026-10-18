@@ -122,6 +122,7 @@ export function EditorPane(p: Props) {
             renderLineHighlight: 'none',
             padding: { top: 10 },
             smoothScrolling: true,
+            stickyScroll: { enabled: false },
           }}
         />
       </div>

@@ -104,7 +104,7 @@ function scalarLabel(o: HeapObj): string {
 
 const BACK_FIELDS = new Set(['prev', 'parent', 'previous', 'back']);
 
-export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; roots: { name: string; id: number }[] }) {
+export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; roots: { name: string; id: number; label: boolean }[] }) {
   // collect reachable objects
   const objs = new Map<number, HeapObj>();
   const queue = roots.map((r) => r.id);
@@ -213,7 +213,7 @@ export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; root
   // pointer variables above nodes
   const varLabels = new Map<number, string[]>();
   for (const r of roots) {
-    if (!nodes.has(r.id)) continue;
+    if (!nodes.has(r.id) || !r.label) continue;
     const l = varLabels.get(r.id) ?? [];
     if (!l.includes(r.name)) l.push(r.name);
     varLabels.set(r.id, l);

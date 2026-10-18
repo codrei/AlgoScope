@@ -60,6 +60,15 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked }: P
   const op = swp.length === 2 ? '⇄' : compareOp(step.text) ?? '';
   const swapAnim = swp.length === 2 ? { a: Math.min(...swp), b: Math.max(...swp) } : null;
 
+  // active range (left..right / low..high): cells outside it are dimmed
+  const find = (names: string[]) => {
+    for (const [i, ms] of markers) if (ms.some((m) => names.includes(m))) return i;
+    return undefined;
+  };
+  const lo = find(['left', 'low', 'lo', 'l', 'start']);
+  const hi = find(['right', 'high', 'hi', 'r', 'end']);
+  const range = lo !== undefined && hi !== undefined && lo <= hi ? { lo, hi } : null;
+
   const style = { '--cell': `${cell}px`, '--cell-font': `${font}px`, '--gap': `${gap}px` } as CSSProperties;
 
   if (kind === 'stack') {
@@ -104,7 +113,8 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked }: P
             anim = from < i ? 'anim-up' : 'anim-down';
             animStyle = { '--dx': `${(from - i) * pitch}px` } as CSSProperties;
           }
-          const cls = ['cell', isLocked ? 'locked' : role ?? '', v.t === 'null' ? 'null' : '', v.t === 'r' ? 'ref' : '', anim].join(' ');
+          const dim = range && (i < range.lo || i > range.hi) && !role && !isLocked;
+          const cls = ['cell', isLocked ? 'locked' : role ?? '', v.t === 'null' ? 'null' : '', v.t === 'r' ? 'ref' : '', anim, dim ? 'dim' : ''].join(' ');
           const mk = markers.get(i);
           return (
             <div className="cell-col" key={i}>

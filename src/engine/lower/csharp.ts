@@ -176,17 +176,23 @@ export function lowerCSharp(root: Node): Program {
       case 'expression_statement':
         return [{ k: 'expr', ln, e: expr(kids(n)[0]) }];
       case 'if_statement': {
-        const c = f(n, 'condition')!;
-        const alt = f(n, 'alternative');
-        return [{ k: 'if', ln, c: expr(c), src: c.text, then: bodyOf(f(n, 'consequence')), else: alt ? bodyOf(alt) : undefined }];
+        const ks = kids(n);
+        const c = f(n, 'condition') ?? ks[0];
+        const cons = f(n, 'consequence') ?? ks[1];
+        const alt = f(n, 'alternative') ?? (ks.length > 2 ? ks[2] : null);
+        return [{ k: 'if', ln, c: expr(c), src: c.text, then: bodyOf(cons), else: alt ? bodyOf(alt) : undefined }];
       }
       case 'while_statement': {
-        const c = f(n, 'condition')!;
-        return [{ k: 'while', ln, c: expr(c), src: c.text, body: bodyOf(f(n, 'body')) }];
+        const ks = kids(n);
+        const c = f(n, 'condition') ?? ks[0];
+        const body = f(n, 'body') ?? ks[ks.length - 1];
+        return [{ k: 'while', ln, c: expr(c), src: c.text, body: bodyOf(body) }];
       }
       case 'do_statement': {
-        const c = f(n, 'condition')!;
-        return [{ k: 'dowhile', ln, c: expr(c), src: c.text, condLn: lineOf(c), body: bodyOf(f(n, 'body')) }];
+        const ks = kids(n);
+        const body = f(n, 'body') ?? ks[0];
+        const c = f(n, 'condition') ?? ks[ks.length - 1];
+        return [{ k: 'dowhile', ln, c: expr(c), src: c.text, condLn: lineOf(c), body: bodyOf(body) }];
       }
       case 'for_statement': {
         const init: Stmt[] = [];

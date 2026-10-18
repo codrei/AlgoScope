@@ -37,7 +37,8 @@ export interface FrameSnap {
   /** line currently running in this frame */
   ln: number;
   vars: [string, SnapVal][];
-  indexVars: string[];
+  /** index variable names per array variable, e.g. { arr: ['j'] } */
+  indexVars: Record<string, string[]>;
   /** frame id, stable across steps for the same call */
   fid: number;
 }

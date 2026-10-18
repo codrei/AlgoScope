@@ -96,8 +96,8 @@ export interface Func {
   retTy: Ty;
   isStatic: boolean;
   cls?: string;
-  /** variables used as array indexes inside this function (for the i/j markers) */
-  indexVars: string[];
+  /** variables used as array indexes inside this function, per array name (for the i/j markers) */
+  indexVars: Record<string, string[]>;
   /** Python: names declared `global` */
   globals?: string[];
 }

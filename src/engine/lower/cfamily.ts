@@ -250,7 +250,7 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
       retTy: withDecl(retBase, { ...d, ref: false }),
       isStatic: !owner,
       cls: owner,
-      indexVars: [],
+      indexVars: {},
     };
     fn.indexVars = collectIndexVars(body);
     return fn;
@@ -426,13 +426,23 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
     };
   }
 
-  function declaration(n: Node): Stmt[] {
+  function declaration(n: Node, local = true): Stmt[] {
     const ln = lineOf(n);
     const base = typeOf(declTypeNode(n));
     const decls: VarDeclItem[] = [];
     for (const dn of fields(n, 'declarator')) {
       const d = unwrap(dn);
-      if (d.params) continue; // function prototype
+      if (d.params) {
+        // inside a function, "vector<int> L(n1);" is a constructor call, not a prototype
+        if (!local || dn.type !== 'function_declarator') continue;
+        const args = kids(d.params).map((p) => {
+          const t = f(p, 'type');
+          if (p.type === 'parameter_declaration' && t && !f(p, 'declarator')) return { k: 'name', ln: lineOf(p), name: t.text } as Expr;
+          return unsupported(p, 'this declaration');
+        });
+        decls.push({ name: d.name, ctorArgs: args });
+        continue;
+      }
       const item: VarDeclItem = { name: d.name };
       if (d.ptr) item.ptr = d.ptr;
       if (d.dims.length) item.dims = d.dims;
@@ -601,7 +611,7 @@ export function lowerCFamily(root: Node, lang: Lang): Program {
       case 'declaration': {
         const t = f(n, 'type');
         if (t && (t.type === 'struct_specifier' || t.type === 'class_specifier') && f(t, 'body')) defineClass(t);
-        prog.globals.push(...declaration(n));
+        prog.globals.push(...declaration(n, false));
         break;
       }
       case 'struct_specifier':

@@ -6,6 +6,7 @@ import {
   Arr, Chr, Flt, FnV, Iter, MapV, Obj, Ptr, RangeV, RefArg, Special, VarCell, isNumeric, keyOf, num, resetIds, truthy, typeName, valEq,
   type ArrKind, type Cell, type Val,
 } from './values';
+import { collectIndexVars } from './lower/util';
 import { NF, builtinName, callFunction, callMethod, getMember, libraryNew, isLibraryType } from './builtins';
 
 export interface RunOptions {
@@ -143,6 +144,7 @@ export class Interp {
   stdinPos = 0;
   cout: StreamState = { fixed: false, precision: 6, width: 0, boolalpha: false };
   private heapCache = new Map<number, { ver: number; item: HeapItem }>();
+  private globalIndexVars: Record<string, string[]>;
 
   constructor(prog: Program, opts: RunOptions = {}) {
     resetIds();
@@ -154,6 +156,7 @@ export class Interp {
     this.stdin = opts.stdin ?? '';
     this.global = new Frame('Global');
     for (const [name, def] of Object.entries(prog.classes)) this.classes.set(name, { def, statics: new Map() });
+    this.globalIndexVars = collectIndexVars(prog.globals);
   }
 
   get frame(): Frame {
@@ -287,7 +290,7 @@ export class Interp {
       for (const [name, c] of rt.statics) gvars.push([this.lang === 'python' ? `${rt.def.name}.${name}` : name, sv(c.get())]);
     }
     if (gvars.length || this.lang === 'python') {
-      out.push({ name: this.lang === 'python' ? 'Global' : 'Globals', ln: this.global.ln, vars: gvars, indexVars: [], fid: 0 });
+      out.push({ name: this.lang === 'python' ? 'Global' : 'Globals', ln: this.global.ln, vars: gvars, indexVars: this.globalIndexVars, fid: 0 });
     }
     for (const fr of this.frames) {
       if (fr === this.global) continue;
@@ -307,7 +310,7 @@ export class Interp {
       const order: string[] = [];
       for (const s of fr.scopes) for (const k of s.keys()) if (!order.includes(k)) order.push(k);
       vars.sort((a, b) => (a[0] === 'this' ? -1 : b[0] === 'this' ? 1 : order.indexOf(a[0]) - order.indexOf(b[0])));
-      out.push({ name: fr.name, ln: fr.ln, vars, indexVars: fr.fn?.indexVars ?? [], fid: fr.id });
+      out.push({ name: fr.name, ln: fr.ln, vars, indexVars: fr.fn?.indexVars ?? {}, fid: fr.id });
     }
     // walk the heap
     const seen = new Set<number>();

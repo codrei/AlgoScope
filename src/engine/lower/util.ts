@@ -110,16 +110,30 @@ export function parseNumber(text: string): { v: number; float: boolean } {
   return { v: Number(t), float: isFloat };
 }
 
-/** Variables used as array indexes (arr[j], arr[j + 1], arr[i - 1]) in a function body. */
-export function collectIndexVars(body: Stmt[]): string[] {
-  const found = new Set<string>();
+/** Variables used as array indexes, per array: { arr: ['j'], L: ['i'], R: ['j'] } (for the i/j markers). */
+export function collectIndexVars(body: Stmt[]): Record<string, string[]> {
+  const found: Record<string, string[]> = {};
+  const add = (arr: string, v: string) => {
+    const list = (found[arr] ??= []);
+    if (!list.includes(v)) list.push(v);
+  };
+  const arrName = (e: Expr): string | null => {
+    if (e.k === 'name') return e.name;
+    if (e.k === 'member') return e.name;
+    if (e.k === 'index') return arrName(e.obj);
+    return null;
+  };
   const visitE = (e: Expr | undefined | null): void => {
     if (!e) return;
     switch (e.k) {
       case 'index': {
         const ix = e.idx;
-        if (ix.k === 'name') found.add(ix.name);
-        else if (ix.k === 'bin' && (ix.op === '+' || ix.op === '-') && ix.l.k === 'name') found.add(ix.l.name);
+        const a = arrName(e.obj);
+        if (a) {
+          if (ix.k === 'name') add(a, ix.name);
+          else if (ix.k === 'bin' && (ix.op === '+' || ix.op === '-') && ix.l.k === 'name') add(a, ix.l.name);
+          else if (ix.k === 'bin' && ix.op === '+' && ix.r.k === 'name') add(a, ix.r.name);
+        }
         visitE(e.obj);
         visitE(e.idx);
         return;
@@ -154,7 +168,7 @@ export function collectIndexVars(body: Stmt[]): string[] {
     }
   };
   body.forEach(visitS);
-  return [...found];
+  return found;
 }
 
 /** Normalise primitive type names across languages. */

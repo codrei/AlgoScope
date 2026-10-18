@@ -588,6 +588,10 @@ input {
   box-shadow: 0 0 16px color-mix(in srgb, var(--locked) 45%, transparent);
 }
 
+.cell.dim {
+  opacity: 0.32;
+}
+
 .cell.null {
   color: var(--text-3);
   font-size: 12px;

@@ -78,16 +78,20 @@ export interface StructRef {
 }
 
 /** Structures to draw for a step: arrays, objects and maps referenced by variables. */
-export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roots: { name: string; id: number }[] }; maps: StructRef[] } {
+export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roots: { name: string; id: number; label: boolean }[] }; maps: StructRef[] } {
   const seen = new Map<number, StructRef>();
   const order: StructRef[] = [];
-  const objRoots: { name: string; id: number }[] = [];
+  const objRoots: { name: string; id: number; label: boolean }[] = [];
   const nested = new Set<number>();
   // arrays referenced from other arrays are drawn inside their parent (2D grids)
   for (const h of Object.values(step.heap)) {
     if (h.kind === 'arr') for (const v of h.items) if (v.t === 'r' && step.heap[v.id]?.kind === 'arr') nested.add(v.id);
   }
-  for (const f of step.frames) {
+  // pointer labels only for the current call and the outermost one (main / globals)
+  const lastIdx = step.frames.length - 1;
+  const baseIdx = step.frames.findIndex((f) => f.fid !== 0);
+  step.frames.forEach((f, fi) => {
+    const label = fi === lastIdx || fi === baseIdx || f.fid === 0;
     for (const [name, v] of f.vars) {
       const id = v.t === 'r' ? v.id : v.t === 'ptr' && v.id !== undefined && step.heap[v.id]?.kind === 'obj' ? v.id : undefined;
       if (id === undefined) continue;
@@ -96,7 +100,7 @@ export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roo
       // Java/C# main(String[] args) is always empty: not worth drawing
       if (name === 'args' && item.kind === 'arr' && item.items.length === 0) continue;
       if (item.kind === 'obj') {
-        objRoots.push({ name, id });
+        objRoots.push({ name, id, label });
         continue;
       }
       if (nested.has(id) && item.kind === 'arr') {
@@ -106,7 +110,7 @@ export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roo
       }
       if (item.kind === 'arr' && item.items.some((x) => x.t === 'r' && step.heap[x.id]?.kind === 'obj') && !item.items.some((x) => x.t === 'p')) {
         // array of nodes (e.g. adjacency of objects): draw the objects as a graph too
-        item.items.forEach((x, i) => x.t === 'r' && objRoots.push({ name: `${name}[${i}]`, id: x.id }));
+        item.items.forEach((x, i) => x.t === 'r' && objRoots.push({ name: `${name}[${i}]`, id: x.id, label: false }));
       }
       const ex = seen.get(id);
       if (ex) {
@@ -117,7 +121,7 @@ export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roo
       seen.set(id, ref);
       order.push(ref);
     }
-  }
+  });
   return {
     arrays: order.filter((s) => s.item.kind === 'arr'),
     maps: order.filter((s) => s.item.kind === 'map'),
@@ -125,22 +129,40 @@ export function structuresFor(step: Step): { arrays: StructRef[]; objects: { roo
   };
 }
 
-const COMMON_INDEX = ['i', 'j', 'k', 'low', 'high', 'lo', 'hi', 'mid', 'left', 'right', 'l', 'r', 'start', 'end', 'min_idx', 'minIdx', 'minIndex', 'min_index', 'maxIdx', 'max_idx', 'top', 'front', 'rear', 'p', 'q', 'idx', 'pos', 'first', 'last'];
+/** Range bounds that are worth marking even when not used directly as an index. */
+const BOUND_NAMES = ['low', 'high', 'lo', 'hi', 'mid', 'left', 'right', 'l', 'r', 'start', 'end', 'top', 'front', 'rear', 'first', 'last', 'minIdx', 'min_idx', 'minIndex', 'min_index', 'maxIdx', 'max_idx', 'pivotIndex', 'pi'];
 
-/** Index markers (i, j, mid...) for an array in the current frame. */
+/** Index markers (i, j, mid...) for an array, from the current frame and the globals. */
 export function markersFor(step: Step, arrId: number, len: number): Map<number, string[]> {
   const out = new Map<number, string[]>();
-  const f = step.frames[step.frames.length - 1];
-  if (!f) return out;
-  const refersHere = f.vars.some(([, v]) => (v.t === 'r' && v.id === arrId) || (v.t === 'ptr' && v.id === arrId));
-  if (!refersHere) return out;
-  const names = new Set([...f.indexVars, ...COMMON_INDEX]);
-  for (const [name, v] of f.vars) {
-    if (!names.has(name) || v.t !== 'p' || v.n === undefined || !Number.isInteger(v.n)) continue;
-    if (v.n < 0 || v.n >= len) continue;
-    const list = out.get(v.n) ?? [];
-    list.push(name);
-    out.set(v.n, list);
+  const cur = step.frames[step.frames.length - 1];
+  if (!cur) return out;
+  const global = step.frames[0]?.fid === 0 ? step.frames[0] : undefined;
+  const frames = global && global !== cur ? [cur, global] : [cur];
+  const refs = (v: SnapVal) => (v.t === 'r' && v.id === arrId) || (v.t === 'ptr' && v.id === arrId);
+  // array variable names (in these frames) that point at this array
+  const arrNames = new Set<string>();
+  for (const f of frames) for (const [n, v] of f.vars) if (refs(v)) arrNames.add(n);
+  if (!arrNames.size) return out;
+  const wanted = new Set<string>();
+  const usedElsewhere = new Set<string>();
+  for (const f of frames) {
+    for (const [arr, vars] of Object.entries(f.indexVars)) {
+      for (const v of vars) (arrNames.has(arr) ? wanted : usedElsewhere).add(v);
+    }
+  }
+  for (const b of BOUND_NAMES) if (!usedElsewhere.has(b)) wanted.add(b);
+  const seen = new Set<string>();
+  for (const f of frames) {
+    for (const [name, v] of f.vars) {
+      if (seen.has(name) || !wanted.has(name)) continue;
+      if (v.t !== 'p' || v.n === undefined || !Number.isInteger(v.n)) continue;
+      seen.add(name);
+      if (v.n < 0 || v.n >= len) continue;
+      const list = out.get(v.n) ?? [];
+      list.push(name);
+      out.set(v.n, list);
+    }
   }
   return out;
 }
