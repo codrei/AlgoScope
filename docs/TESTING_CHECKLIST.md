@@ -63,5 +63,6 @@ That's how we find unsupported features before the professor does.
 - **How does it know when something is a swap?** When two elements of the same array exchange values within a
   few steps, the engine marks it as a swap. That works whether the code uses a temp variable, `swap()`, or Python's `a, b = b, a`.
 - **Does it work without internet?** Yes, after the first visit the browser keeps a copy of the app.
-- **How do you know it's correct?** 166 engine tests and 14 click-through interface tests run every example in every language, plus classroom-style
+- **How do you know it's correct?** 45 typical lecture programs print exactly what the real compilers (gcc, g++,
+  javac, .NET, CPython) print, plus 166 engine tests and 14 click-through interface tests run every example in every language, plus classroom-style
   programs, before each update is published.

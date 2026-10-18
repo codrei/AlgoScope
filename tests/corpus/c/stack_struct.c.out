@@ -1,0 +1,11 @@
+Pushed 10
+Pushed 20
+Pushed 30
+Pushed 40
+Pushed 50
+Stack Overflow! Cannot push 60
+Stack: 50 40 30 20 10 
+Top element: 50
+Popped: 50
+Popped: 40
+Stack: 30 20 10 

@@ -35,6 +35,10 @@ export class Arr {
   lastWrite?: { idx: number; old: Val; neu: Val; step: number };
   /** priority queues: true = smallest first (Java/Python/C#), false = largest first (C++) */
   minHeap?: boolean;
+  /** priority queues with a custom comparator (negative = comes out first) */
+  cmpFn?: (a: Val, b: Val) => number;
+  /** C# PriorityQueue<TElement, TPriority>: items are [element, priority] pairs */
+  priorityPairs?: boolean;
   constructor(items: Val[], kind: ArrKind, elemTy?: Ty) {
     this.id = nextId++;
     this.items = items;
@@ -64,6 +68,8 @@ export class MapV {
   entries: Map<string, [Val, Val]>;
   isSet: boolean;
   sorted: boolean;
+  /** Python defaultdict: makes the value for a missing key */
+  factory?: Val;
   version = 0;
   constructor(isSet: boolean, sorted = false) {
     this.id = nextId++;
@@ -136,6 +142,8 @@ export class FnV {
   self?: Obj;
   name: string;
   lambda?: { params: string[]; body: import('./ir').Expr; env: Map<string, Cell>[] };
+  /** a built-in function value, e.g. a Comparator made by Comparator.comparingInt */
+  native?: (args: Val[]) => Val;
   constructor(name: string) {
     this.name = name;
   }

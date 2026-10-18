@@ -59,16 +59,19 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         </ul>
         <h3>What is supported</h3>
         <p>
-          AlgoScope runs the kind of code written in Data Structures &amp; Algorithms and Algorithms &amp; Complexity:
-          variables, loops, if/else, switch, functions, recursion, arrays (1D and 2D), strings, structs and classes (for
-          nodes), pointers in C/C++, and common library collections: <code>vector</code>, <code>stack</code>,
-          <code>queue</code>, <code>map</code>, <code>ArrayList</code>, <code>HashMap</code>, <code>List</code>,
-          <code>Dictionary</code>, Python lists, dicts, sets and <code>deque</code>.
+          The code written in Data Structures &amp; Algorithms and Algorithms &amp; Complexity: variables, loops, if/else,
+          switch, functions, recursion, 1D/2D arrays, strings, structs and classes (constructors, methods, inheritance,
+          interfaces, generics and templates), C pointers and <code>malloc</code>, C++ references, lambdas and comparators,
+          exceptions (<code>throw</code>/<code>raise</code> with <code>try</code>/<code>catch</code>), and the usual
+          collections: <code>vector</code>, <code>stack</code>, <code>queue</code>, <code>priority_queue</code>,{' '}
+          <code>map</code>, <code>ArrayList</code>, <code>HashMap</code>, <code>PriorityQueue</code>, <code>List</code>,{' '}
+          <code>Dictionary</code>, Python lists, dicts, sets, <code>deque</code>, <code>heapq</code> and{' '}
+          <code>@lru_cache</code>.
         </p>
         <p className="notice">
-          It is a teaching interpreter, not a full compiler. Templates/generics you write yourself, exceptions, threads,
-          files and most of the standard library are not supported. If something isn't supported, AlgoScope tells you
-          which line. Programs stop after 5,000 steps to keep the animation readable, so use small inputs.
+          It is a teaching interpreter, not a full compiler: threads, files, LINQ/streams and most of the standard
+          library beyond the collections above are not supported, and AlgoScope tells you which line if it meets one.
+          Animations stop after 5,000 steps, so use small inputs (about 5–10 elements).
         </p>
       </div>
     </div>

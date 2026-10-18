@@ -59,6 +59,7 @@ function rand(): number {
 export function libraryNew(I: Interp, t: Ty, vals: Val[], exprs?: Expr[]): Val {
   void exprs;
   if (t.base === 'string') {
+    if (vals[0] instanceof Arr) return vals[0].items.map((x) => (x instanceof Chr ? String.fromCharCode(x.c) : toText(x, I.lang))).join('');
     if (vals.length === 2 && isNumeric(vals[0])) return toText(vals[1], I.lang).repeat(num(vals[0]));
     return vals.length ? I.strOf(vals[0]) : '';
   }
@@ -87,11 +88,26 @@ export function libraryNew(I: Interp, t: Ty, vals: Val[], exprs?: Expr[]): Val {
     const m = new MapV(spec.set, spec.sorted);
     const src = vals[0];
     if (src instanceof MapV) for (const [k, v] of src.entries) m.entries.set(k, v);
-    else if (src instanceof Arr) for (const x of src.items) m.entries.set(keyOf(x), [x, true]);
+    else if (src instanceof Arr) {
+      for (const x of src.items) {
+        if (!spec.set && x instanceof Arr && x.items.length === 2) m.entries.set(keyOf(x.items[0]), [x.items[0], x.items[1]]);
+        else m.entries.set(keyOf(x), [x, true]);
+      }
+    }
     return m;
   }
   const a = new Arr([], spec.arr, elemTy);
-  if (spec.arr === 'pq') a.minHeap = I.lang !== 'cpp';
+  if (spec.arr === 'pq') {
+    a.minHeap = I.lang !== 'cpp' || t.args?.[2]?.base === 'greater';
+    const custom = vals.find((v) => v instanceof FnV || v instanceof Special);
+    if (custom) a.cmpFn = toComparator(I, custom);
+    if (I.lang === 'cpp' && t.args?.[2]?.base === 'greater') a.cmpFn = undefined;
+    if (!a.cmpFn && I.lang !== 'cpp') {
+      const nat = naturalCmp(I);
+      a.cmpFn = (x, y) => nat(x, y);
+    }
+    if (I.lang === 'csharp' && (t.args?.length ?? 0) >= 2) a.priorityPairs = true;
+  }
   if (vals.length) {
     const v0 = vals[0];
     if (I.lang === 'cpp' && spec.arr === 'vector' && isNumeric(v0)) {
@@ -101,7 +117,11 @@ export function libraryNew(I: Interp, t: Ty, vals: Val[], exprs?: Expr[]): Val {
       for (let i = 0; i < n; i++) a.items.push(fill instanceof Arr ? new Arr([...fill.items], fill.kind, fill.elemTy) : fill);
     } else if (v0 instanceof Arr) {
       a.items = [...v0.items];
-      if (spec.arr === 'pq') heapify(a);
+      if (spec.arr === 'pq') {
+        a.items = [];
+        for (const x of v0.items) heapPush(I, a, x);
+        I.touches.length = 0;
+      }
     } else if (v0 instanceof MapV) {
       a.items = [...v0.entries.values()].map(([k]) => k);
     }
@@ -109,8 +129,47 @@ export function libraryNew(I: Interp, t: Ty, vals: Val[], exprs?: Expr[]): Val {
   return a;
 }
 
+// ------------------------------------------------------------------ comparators
+
+/** Natural order, using compareTo / CompareTo / __lt__ for user objects (Comparable). */
+export function naturalCmp(I: Interp): (a: Val, b: Val) => number {
+  return (a, b) => {
+    if (a instanceof Obj) {
+      for (const n of ['compareTo', 'CompareTo']) {
+        const m = I.findMethod(a.cls, n, 1);
+        if (m) return num(I.invoke(m, [b], a));
+      }
+      const lt = I.findMethod(a.cls, '__lt__', 1);
+      if (lt) return truthy(I.invoke(lt, [b], a)) ? -1 : truthy(I.invoke(lt, [a], b as Obj)) ? 1 : 0;
+    }
+    return cmpVals(a, b);
+  };
+}
+
+/** A comparator value (Java Comparator / C# Comparison / lambda / reverseOrder) as a JS function. */
+export function toComparator(I: Interp, c: Val): ((a: Val, b: Val) => number) | undefined {
+  const nat = naturalCmp(I);
+  if (c instanceof Special && (c.kind === 'reverseOrder' || c.kind === 'greater')) return (a, b) => -nat(a, b);
+  if (c instanceof Special && c.kind === 'less') return nat;
+  if (c instanceof FnV) {
+    return (a, b) => {
+      const r = I.callFnValue(c, [a, b]);
+      if (typeof r === 'boolean') return r ? -1 : truthy(I.callFnValue(c, [b, a])) ? 1 : 0;
+      return num(r);
+    };
+  }
+  return undefined;
+}
+
+function nativeFn(name: string, fn: (args: Val[]) => Val): FnV {
+  const f = new FnV(name);
+  f.native = fn;
+  return f;
+}
+
 // ------------------------------------------------------------------ heaps
 function heapLess(a: Arr, x: Val, y: Val): boolean {
+  if (a.cmpFn) return a.cmpFn(x, y) < 0;
   const c = cmpVals(x, y);
   return a.minHeap ? c < 0 : c > 0;
 }
@@ -186,7 +245,7 @@ export function builtinName(I: Interp, name: string): R {
   if (L === 'java') {
     switch (name) {
       case 'System': case 'Math': case 'Integer': case 'Long': case 'Double': case 'Character': case 'String':
-      case 'Arrays': case 'Collections': case 'Boolean': case 'List':
+      case 'Arrays': case 'Collections': case 'Boolean': case 'List': case 'Comparator':
         return new Special(name);
     }
   }
@@ -204,6 +263,8 @@ export function builtinName(I: Interp, name: string): R {
   if (L === 'python') {
     switch (name) {
       case 'math': case 'sys': case 'heapq': case 'collections': case 'random': case 'itertools': case 'functools':
+        return new Special(name);
+      case 'defaultdict': case 'Counter': case 'OrderedDict': case 'set': case 'dict': case 'tuple': case 'bool':
         return new Special(name);
       case '__name__': return '__main__';
       case 'print': case 'len': case 'range': case 'min': case 'max': case 'sum': case 'abs': case 'int': case 'float':
@@ -232,6 +293,10 @@ function kwargs(I: Interp, args: Expr[]): Map<string, Val> {
 }
 
 function lenOf(I: Interp, v: Val): number {
+  if (v instanceof Obj) {
+    const m = I.findMethod(v.cls, '__len__', 0);
+    if (m) return num(I.invoke(m, [], v));
+  }
   if (typeof v === 'string') return v.length;
   if (v instanceof Arr) return v.items.length;
   if (v instanceof MapV) return v.entries.size;
@@ -264,14 +329,22 @@ function mathFn(I: Interp, name: string, a: Val[]): R {
     case 'cbrt': return new Flt(Math.cbrt(n(0)));
     case 'floor': return py ? Math.floor(n(0)) : new Flt(Math.floor(n(0)));
     case 'ceil': case 'ceiling': return py ? Math.ceil(n(0)) : new Flt(Math.ceil(n(0)));
-    case 'round':
+    case 'round': {
       if (I.lang === 'java') return Math.round(n(0));
-      if (py) {
-        if (a.length > 1) return new Flt(Number(n(0).toFixed(n(1))));
-        const x = n(0), r = Math.round(x);
-        return Math.abs(x % 1) === 0.5 ? (r % 2 === 0 ? r : r - 1) : r;
-      }
-      return new Flt(Math.round(n(0)));
+      // C# Math.Round and Python round() round halves to the even neighbor; C rounds them away from zero
+      const digits = a.length > 1 ? n(1) : 0;
+      const f = Math.pow(10, digits);
+      const x = n(0) * f;
+      const fl = Math.floor(x);
+      const diff = x - fl;
+      let r: number;
+      if (I.lang === 'c' || I.lang === 'cpp') r = Math.sign(x) * Math.round(Math.abs(x));
+      else if (Math.abs(diff - 0.5) < 1e-9) r = fl % 2 === 0 ? fl : fl + 1;
+      else r = Math.round(x);
+      const v = r / f;
+      if (py && a.length < 2) return v;
+      return new Flt(v);
+    }
     case 'log': return new Flt(a.length > 1 ? Math.log(n(0)) / Math.log(n(1)) : Math.log(n(0)));
     case 'log2': return new Flt(Math.log2(n(0)));
     case 'log10': return new Flt(Math.log10(n(0)));
@@ -300,7 +373,8 @@ function sortArr(I: Interp, a: Arr, opts: { reverse?: boolean; key?: Val; cmp?: 
   const from = opts.from ?? 0, to = opts.to ?? a.items.length;
   const part = a.items.slice(from, to);
   const keyed = opts.key ? part.map((x) => [I.callFnValue(opts.key!, [x]), x] as [Val, Val]) : part.map((x) => [x, x] as [Val, Val]);
-  keyed.sort((p, q) => (opts.cmp ? opts.cmp(p[0], q[0]) : cmpVals(p[0], q[0])) * (opts.reverse ? -1 : 1));
+  const nat = naturalCmp(I);
+  keyed.sort((p, q) => (opts.cmp ? opts.cmp(p[0], q[0]) : nat(p[0], q[0])) * (opts.reverse ? -1 : 1));
   keyed.forEach(([, x], i) => (a.items[from + i] = x));
   a.version++;
   for (let i = from; i < to; i++) I.touches.push({ id: a.id, idx: i, role: 'write' });
@@ -522,6 +596,20 @@ function pyFunction(I: Interp, name: string, args: Expr[]): R {
       const v = vals(I, args);
       return new Arr(v.length ? toArr(I, v[0]) : [], 'deque');
     }
+    case 'defaultdict': case 'Counter': case 'OrderedDict': {
+      const v = vals(I, args);
+      const m = new MapV(false);
+      if (name === 'defaultdict') m.factory = v[0] ?? null;
+      if (name === 'Counter') {
+        m.factory = new Special('int');
+        if (v[0] !== undefined) for (const x of toArr(I, v[0])) {
+          const e = m.entries.get(keyOf(x));
+          m.entries.set(keyOf(x), [x, (e ? num(e[1]) : 0) + 1]);
+        }
+      }
+      if (name === 'OrderedDict' && v[0] instanceof MapV) for (const [k, e] of v[0].entries) m.entries.set(k, e);
+      return m;
+    }
     case 'id': {
       const x = vals(I, args)[0];
       return x instanceof Arr || x instanceof Obj || x instanceof MapV ? 140000000 + x.id * 16 : 0;
@@ -631,6 +719,9 @@ function cFunction(I: Interp, name: string, args: Expr[]): R {
     case 'atof': return new Flt(parseFloat(cStr(vals(I, args)[0])) || 0);
     case 'isdigit': { const c = num(vals(I, args)[0]); return c >= 48 && c <= 57 ? 1 : 0; }
     case 'isalpha': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[a-zA-Z]/.test(c) ? 1 : 0; }
+    case 'isalnum': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[a-zA-Z0-9]/.test(c) ? 1 : 0; }
+    case 'ispunct': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[!-\/:-@[-`{-~]/.test(c) ? 1 : 0; }
+    case 'isxdigit': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[0-9a-fA-F]/.test(c) ? 1 : 0; }
     case 'isspace': { const c = String.fromCharCode(num(vals(I, args)[0])); return /\s/.test(c) ? 1 : 0; }
     case 'isupper': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[A-Z]/.test(c) ? 1 : 0; }
     case 'islower': { const c = String.fromCharCode(num(vals(I, args)[0])); return /[a-z]/.test(c) ? 1 : 0; }
@@ -720,6 +811,24 @@ function cFunction(I: Interp, name: string, args: Expr[]): R {
       for (let i = range.from; i < range.to; i++) acc = I.binop('+', acc, range.arr.items[i]);
       return acc;
     }
+    case 'count': case 'count_if': case 'any_of': case 'all_of': case 'none_of': case 'find': case 'find_if': {
+      const v = vals(I, args);
+      const range = iterRange(I, v[0], v[1]);
+      const test = (x: Val) => (name === 'count' || name === 'find' ? valEq(x, v[2]) : truthy(I.callFnValue(v[2], [x])));
+      let hits = 0;
+      for (let i = range.from; i < range.to; i++) {
+        if (test(range.arr.items[i])) {
+          if (name === 'find' || name === 'find_if') return new Iter(range.arr, i);
+          if (name === 'any_of') return true;
+          hits++;
+        } else if (name === 'all_of') return false;
+      }
+      if (name === 'find' || name === 'find_if') return new Iter(range.arr, range.to);
+      if (name === 'any_of') return false;
+      if (name === 'all_of') return true;
+      if (name === 'none_of') return hits === 0;
+      return hits;
+    }
     case 'min_element': case 'max_element': {
       const v = vals(I, args);
       const range = iterRange(I, v[0], v[1]);
@@ -782,6 +891,8 @@ export function getMember(I: Interp, o: Val, name: string): R {
       case 'Double.POSITIVE_INFINITY': case 'double.PositiveInfinity': return new Flt(Infinity);
       case 'Double.NEGATIVE_INFINITY': case 'double.NegativeInfinity': return new Flt(-Infinity);
       case 'collections.deque': return new Special('deque');
+      case 'collections.defaultdict': return new Special('defaultdict');
+      case 'collections.Counter': return new Special('Counter');
       case 'String.Empty': return '';
     }
     if (k === 'math' || k === 'heapq' || k === 'random' || k === 'sys' || k === 'Math') return new Special(`${k}.${name}`);
@@ -791,8 +902,9 @@ export function getMember(I: Interp, o: Val, name: string): R {
     switch (name) {
       case 'length': if (I.lang === 'java') return o.items.length; break;
       case 'Length': case 'Count': return o.items.length;
-      case 'first': if (o.kind === 'tuple') return o.items[0]; break;
-      case 'second': if (o.kind === 'tuple') return o.items[1]; break;
+      // a {a, b} brace list used as a std::pair
+      case 'first': if (o.kind === 'tuple' || (o.kind === 'array' && o.items.length === 2)) return o.items[0]; break;
+      case 'second': if (o.kind === 'tuple' || (o.kind === 'array' && o.items.length === 2)) return o.items[1]; break;
     }
     return NF;
   }
@@ -817,6 +929,18 @@ export function callMethod(I: Interp, o: Val, name: string, args: Expr[], objExp
   if (o instanceof MapV) return mapMethod(I, o, name, args);
   if (o instanceof Obj) return objMethod(I, o, name, args);
   if (o instanceof Iter) return NF;
+  if (o instanceof FnV && name === 'reversed') {
+    const base = toComparator(I, o)!;
+    return nativeFn('comparator', ([x, y]) => -base(x, y));
+  }
+  if (o instanceof FnV && name === 'thenComparing') {
+    const first = toComparator(I, o)!;
+    const next = vals(I, args)[0];
+    const second = next instanceof FnV && next.fn?.params.length === 1
+      ? (x: Val, y: Val) => cmpVals(I.callFnValue(next, [x]), I.callFnValue(next, [y]))
+      : toComparator(I, next)!;
+    return nativeFn('comparator', ([x, y]) => first(x, y) || second(x, y));
+  }
   if (o instanceof Chr && I.lang === 'cpp') return NF;
   if (isNumeric(o) || typeof o === 'boolean') {
     switch (name) {
@@ -883,7 +1007,13 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
         case 'max': return Math.max(...v().map(num));
         case 'min': return Math.min(...v().map(num));
         case 'compare': { const a = v(); return Math.sign(num(a[0]) - num(a[1])); }
-        case 'TryParse': return NF;
+        case 'TryParse': {
+          const s = I.strOf(I.ev(args[0])).trim();
+          const cell = I.lv(args[1]);
+          const ok = /^[-+]?\d+$/.test(s);
+          cell.set(ok ? parseInt(s, 10) : 0);
+          return ok;
+        }
       }
       break;
     case 'Double': case 'double':
@@ -912,7 +1042,11 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
     }
     case 'String':
       switch (name) {
-        case 'valueOf': return I.strOf(v()[0]);
+        case 'valueOf': {
+          const x = v()[0];
+          if (x instanceof Arr) return x.items.map((c) => (c instanceof Chr ? String.fromCharCode(c.c) : I.strOf(c))).join('');
+          return I.strOf(x);
+        }
         case 'join': case 'Join': {
           const a = v();
           const items = a.length === 2 && a[1] instanceof Arr ? a[1].items : a.slice(1);
@@ -923,6 +1057,11 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
           return I.lang === 'java' ? printf(I.strOf(a[0]), a.slice(1), 'java') : csFormat(I.strOf(a[0]), a.slice(1));
         }
         case 'IsNullOrEmpty': { const s = v()[0]; return s === null || s === ''; }
+        case 'Compare': case 'CompareOrdinal': {
+          const [x, y] = v().map((z) => I.strOf(z));
+          return x < y ? -1 : x > y ? 1 : 0;
+        }
+        case 'Concat': return v().map((z) => I.strOf(z)).join('');
       }
       break;
     case 'Arrays':
@@ -939,6 +1078,10 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
         case 'sort': {
           const a = v();
           const arr = a[0] as Arr;
+          if (a[1] !== undefined && !isNumeric(a[1])) {
+            sortArr(I, arr, { cmp: toComparator(I, a[1]) });
+            return undefined;
+          }
           sortArr(I, arr, { from: a[1] !== undefined ? num(a[1]) : 0, to: a[2] !== undefined ? num(a[2]) : arr.items.length });
           return undefined;
         }
@@ -970,7 +1113,7 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
       break;
     case 'Array':
       switch (name) {
-        case 'Sort': { sortArr(I, v()[0] as Arr); return undefined; }
+        case 'Sort': { const a = v(); sortArr(I, a[0] as Arr, { cmp: a[1] !== undefined ? toComparator(I, a[1]) : undefined }); return undefined; }
         case 'Reverse': { const a = v()[0] as Arr; a.items.reverse(); a.version++; return undefined; }
         case 'Fill': { const [arr, x] = v() as [Arr, Val]; arr.items = arr.items.map(() => x); arr.version++; return undefined; }
         case 'IndexOf': { const [arr, x] = v() as [Arr, Val]; return arr.items.findIndex((y) => valEq(x, y)); }
@@ -986,7 +1129,7 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
       break;
     case 'Collections':
       switch (name) {
-        case 'sort': { const a = v(); sortArr(I, a[0] as Arr, { reverse: a[1] instanceof Special }); return undefined; }
+        case 'sort': { const a = v(); sortArr(I, a[0] as Arr, { cmp: a[1] !== undefined ? toComparator(I, a[1]) : undefined }); return undefined; }
         case 'reverse': { const a = v()[0] as Arr; a.items.reverse(); a.version++; return undefined; }
         case 'swap': {
           const [arr, i, j] = v() as [Arr, Val, Val];
@@ -1003,6 +1146,16 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
     case 'List':
       if (name === 'of') return new Arr(v(), 'list');
       break;
+    case 'Comparator': {
+      const a = v();
+      if (name === 'comparingInt' || name === 'comparingDouble' || name === 'comparing' || name === 'comparingLong') {
+        const key = a[0];
+        return nativeFn('comparator', ([x, y]) => cmpVals(I.callFnValue(key, [x]), I.callFnValue(key, [y])));
+      }
+      if (name === 'reverseOrder') return new Special('reverseOrder');
+      if (name === 'naturalOrder') return nativeFn('comparator', ([x, y]) => naturalCmp(I)(x, y));
+      break;
+    }
     case 'Scanner':
       switch (name) {
         case 'nextInt': case 'nextLong': {
@@ -1042,6 +1195,11 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
       break;
     case 'heapq': {
       const a = v();
+      if (name === 'nsmallest' || name === 'nlargest') {
+        const k = num(a[0]);
+        const items = toArr(I, a[1]).slice().sort((x, y) => cmpVals(x, y) * (name === 'nlargest' ? -1 : 1));
+        return new Arr(items.slice(0, k), 'list');
+      }
       const h = a[0] as Arr;
       if (!(h instanceof Arr)) break;
       h.minHeap = true;
@@ -1049,6 +1207,11 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
         case 'heappush': heapPush(I, h, a[1]); I.note = `heappush ${I.fmt(a[1])}`; return null;
         case 'heappop': { const r = heapPop(I, h); I.note = `heappop → ${I.fmt(r)}`; return r; }
         case 'heapify': heapify(h); h.version++; return null;
+        case 'nsmallest': case 'nlargest': {
+          const k = num(a[0]);
+          const items = toArr(I, a[1]).slice().sort((x, y) => cmpVals(x, y) * (name === 'nlargest' ? -1 : 1));
+          return new Arr(items.slice(0, k), 'list');
+        }
       }
       break;
     }
@@ -1109,18 +1272,29 @@ function arrMethod(I: Interp, a: Arr, name: string, args: Expr[]): R {
   if (a.kind === 'pq') {
     switch (name) {
       case 'push': case 'offer': case 'add': case 'Enqueue': case 'emplace': {
-        const x = v()[0];
+        const vv = v();
+        let x = vv[0];
+        if (a.priorityPairs) {
+          x = new Arr([vv[0], vv[1]], 'tuple');
+          const nat = naturalCmp(I);
+          a.cmpFn = (p, q) => nat((p as Arr).items[1], (q as Arr).items[1]);
+        }
         heapPush(I, a, x);
         I.note = `PUSH ${I.fmt(x)}`;
         return L === 'java' ? true : undefined;
       }
       case 'pop': case 'poll': case 'Dequeue': case 'remove': {
         if (!n && name === 'poll') return null;
-        const x = heapPop(I, a);
+        let x = heapPop(I, a);
+        if (a.priorityPairs && x instanceof Arr) x = x.items[0];
         I.note = `POP ${I.fmt(x)}`;
         return L === 'cpp' ? undefined : x;
       }
-      case 'top': case 'peek': case 'Peek': return n ? peekAt(I, a, 0) : L === 'java' ? null : peekAt(I, a, 0);
+      case 'top': case 'peek': case 'Peek': {
+        const x = n ? peekAt(I, a, 0) : L === 'java' ? null : peekAt(I, a, 0);
+        return a.priorityPairs && x instanceof Arr ? x.items[0] : x;
+      }
+      case 'Count': return n;
       case 'empty': case 'isEmpty': return n === 0;
       case 'size': return n;
     }
@@ -1302,7 +1476,7 @@ function arrMethod(I: Interp, a: Arr, name: string, args: Expr[]): R {
     case 'sort': case 'Sort': {
       const k = kwargs(I, args);
       const vv = v();
-      sortArr(I, a, { reverse: truthy(k.get('reverse') ?? false) || (vv[0] instanceof Special && vv[0].kind === 'reverseOrder'), key: k.get('key') });
+      sortArr(I, a, { reverse: truthy(k.get('reverse') ?? false), key: k.get('key'), cmp: vv[0] !== undefined && vv[0] !== null ? toComparator(I, vv[0]) : undefined });
       return L === 'python' ? null : undefined;
     }
     case 'reverse': case 'Reverse':
@@ -1506,6 +1680,13 @@ function mapMethod(I: Interp, m: MapV, name: string, args: Expr[]): R {
       const e = m.entries.get(keyOf(k));
       return e ? e[1] : L === 'python' ? (d ?? null) : null;
     }
+    case 'TryGetValue': {
+      const k = I.ev(args[0]);
+      const cell = I.lv(args[1]);
+      const e = m.entries.get(keyOf(k));
+      cell.set(e ? e[1] : 0);
+      return !!e;
+    }
     case 'getOrDefault': case 'GetValueOrDefault': {
       const [k, d] = v();
       const e = m.entries.get(keyOf(k));
@@ -1591,6 +1772,9 @@ function mapMethod(I: Interp, m: MapV, name: string, args: Expr[]): R {
 }
 
 function objMethod(I: Interp, o: Obj, name: string, args: Expr[]): R {
+  if (o.fields.has('message') && ['getMessage', 'what', 'getLocalizedMessage', 'ToString', 'toString'].includes(name)) {
+    return name === 'toString' || name === 'ToString' ? (I.objText(o, false) ?? String(o.fields.get('message'))) : o.fields.get('message');
+  }
   if (o.cls === 'Entry') {
     if (name === 'getKey') return o.fields.get('key');
     if (name === 'getValue') return o.fields.get('value');

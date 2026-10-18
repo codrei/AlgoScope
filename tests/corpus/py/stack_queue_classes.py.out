@@ -1,0 +1,6 @@
+(a[b]{c}) True
+(] False
+((() False
+100101
+Queue(job2, job3)
+caught: pop from empty stack

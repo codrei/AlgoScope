@@ -45,6 +45,7 @@ export type Expr =
   | { k: 'fstr'; ln: number; parts: (string | { e: Expr; spec?: string })[] }
   | { k: 'kw'; ln: number; name: string; value: Expr }
   | { k: 'spread'; ln: number; e: Expr }
+  | { k: 'declvar'; ln: number; name: string; ty: Ty }
   | { k: 'cast'; ln: number; ty: Ty; e: Expr }
   | { k: 'sizeof'; ln: number; ty?: Ty; e?: Expr }
   | { k: 'lambda'; ln: number; params: string[]; body: Expr };
@@ -78,7 +79,17 @@ export type Stmt =
   | { k: 'switch'; ln: number; e: Expr; cases: { tests: Expr[] | null; body: Stmt[] }[] }
   | { k: 'global'; ln: number; names: string[] }
   | { k: 'del'; ln: number; targets: Expr[] }
+  | { k: 'try'; ln: number; body: Stmt[]; handlers: CatchClause[]; elseBody?: Stmt[]; finallyBody?: Stmt[] }
+  | { k: 'throw'; ln: number; e?: Expr }
   | { k: 'unsupported'; ln: number; what: string };
+
+/** catch (T e) / except T as e. types null = catch everything. */
+export interface CatchClause {
+  types: string[] | null;
+  name?: string;
+  ln: number;
+  body: Stmt[];
+}
 
 export interface Param {
   name: string;
@@ -100,6 +111,8 @@ export interface Func {
   indexVars: Record<string, string[]>;
   /** Python: names declared `global` */
   globals?: string[];
+  /** Python @lru_cache / @cache: results are remembered per argument list */
+  memo?: boolean;
 }
 
 export interface FieldDef {

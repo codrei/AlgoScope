@@ -1,0 +1,5 @@
+10 -> 20 -> 30 -> 40 -> NULL
+Count = 4
+Position of 30 = 3
+99 not found
+20 -> 30 -> 40 -> NULL

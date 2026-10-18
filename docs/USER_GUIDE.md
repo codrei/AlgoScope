@@ -92,14 +92,21 @@ Type or paste a program into the editor and press **Run**. It needs a normal ent
 `Scanner`, `Console.ReadLine`, `input()`), open **Input (stdin)** under the editor and type the values.
 
 **Supported:** variables, arithmetic, if/else, switch, for/while/do-while, break/continue, functions,
-recursion, 1D and 2D arrays, strings, structs and classes (constructors, methods, inheritance), C pointers
-and `malloc`, C++ references, and the usual collections: `vector`, `stack`, `queue`, `priority_queue`, `map`,
-`set`, `ArrayList`, `LinkedList`, `HashMap`, `HashSet`, `Stack`, `List`, `Dictionary`, `Queue`, Python lists,
-dicts, sets, tuples and `deque`.
+recursion, 1D and 2D arrays, strings (including changing C++ strings in place), structs and classes (constructors,
+methods, inheritance, interfaces, abstract classes, generics and C++ templates), C pointers, double pointers and
+`malloc`, C++ references, lambdas and comparators (`sort` with a compare function, `Comparator.comparingInt`,
+`Comparable`/`IComparable`), exceptions (`throw`/`raise` with `try`/`catch`), and the usual collections: `vector`,
+`stack`, `queue`, `priority_queue` (including `greater<>`), `map`, `set`, `pair`, `ArrayList`, `LinkedList`, `HashMap`,
+`TreeMap`, `HashSet`, `PriorityQueue`, `List`, `Dictionary`, `Queue`, `Stack`, Python lists, dicts, sets, tuples,
+`deque`, `defaultdict`, `Counter`, `heapq` and `@lru_cache`.
 
-**Not supported:** templates/generics that you define yourself, exceptions (`try/catch` runs only the `try`
-part), threads, files, lambdas in Java/C#/C++, and most of the standard library beyond the collections above.
-When something is not supported, AlgoScope says which line.
+**Not supported:** threads, files, Java streams, C# LINQ, operator overloading, and most of the standard library
+beyond the collections above. When something is not supported, AlgoScope says which line.
+
+**Checked against the real compilers:** 45 typical lecture programs (linked lists with double pointers, BST insert/delete,
+heap sort, hash tables, infix-to-postfix, N-Queens, Floyd–Warshall, Kruskal, Dijkstra with priority queues, topological
+sort, memoized DP, generic stacks and queues, interfaces, exceptions and more) print exactly what gcc, g++, javac, .NET and
+CPython print. They run as automated tests before every update.
 
 **Limits:** a run stops after 5,000 steps so the animation stays readable. Use small inputs (about 5–10
 elements) for animations, and the Complexity Lab for bigger sizes.

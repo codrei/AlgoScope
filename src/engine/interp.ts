@@ -1,6 +1,6 @@
 // The interpreter: runs a Program one statement at a time and records a Step for each.
 import type { ClassDef, Expr, Func, Lang, Program, Stmt, Ty } from './ir';
-import { display, pyFormatSpec, csFormatItem, type StreamState } from './format';
+import { display, pyFormatSpec, csFormatItem, setObjTextHook, type StreamState } from './format';
 import { consequence, OP_WORDS, plain, type CheckCtx } from './say';
 import type { Counts, FrameSnap, HeapItem, SnapVal, Step, StepKind, Touch, Trace } from './trace';
 import {
@@ -27,6 +27,21 @@ export class RuntimeErr extends Error {
 }
 
 class StepLimit extends Error {}
+
+/** A thrown exception object travelling up to the nearest matching catch. */
+export class Thrown extends Error {
+  obj: Obj;
+  line: number;
+  constructor(obj: Obj, line: number) {
+    super(String(obj.fields.get('message') ?? obj.cls));
+    this.obj = obj;
+    this.line = line;
+  }
+}
+
+const STD_EXCEPTIONS = new Set(['exception', 'runtime_error', 'logic_error', 'out_of_range', 'invalid_argument', 'overflow_error', 'underflow_error', 'length_error', 'domain_error', 'range_error', 'bad_alloc', 'Throwable']);
+export const isExceptionName = (n: string) => /(Error|Exception)$/.test(n) || STD_EXCEPTIONS.has(n);
+const CATCH_ALL = new Set(['Exception', 'BaseException', 'Throwable', 'exception', 'RuntimeException', 'SystemException', 'Error']);
 
 type Completion = undefined | { t: 'break' } | { t: 'continue' } | { t: 'return'; v: Val };
 
@@ -189,7 +204,32 @@ export class Interp {
   }
 
   // ===================================================================== run
+  /** Text of an object printed with its own toString() / ToString() / __str__ / __repr__. */
+  private printing = 0;
+  objText(o: Obj, repr: boolean): string | undefined {
+    if (o.fields.has('message') && (isExceptionName(o.cls) || this.isExceptionClass(o.cls)) && !this.findMethod(o.cls, this.lang === 'python' ? '__str__' : 'toString', 0)) {
+      const msg = String(o.fields.get('message'));
+      if (this.lang === 'python') return repr ? `${o.cls}(${JSON.stringify(msg)})` : msg;
+      if (this.lang === 'java') return msg ? `${o.cls}: ${msg}` : o.cls;
+      return msg;
+    }
+    const names = this.lang === 'java' ? ['toString'] : this.lang === 'csharp' ? ['ToString'] : this.lang === 'python' ? (repr ? ['__repr__'] : ['__str__', '__repr__']) : [];
+    for (const n of names) {
+      const m = this.findMethod(o.cls, n, 0);
+      if (m && this.printing < 20) {
+        this.printing++;
+        try {
+          return this.strOf(this.invoke(m, [], o));
+        } finally {
+          this.printing--;
+        }
+      }
+    }
+    return undefined;
+  }
+
   run(): Trace {
+    setObjTextHook((o, repr) => this.objText(o, repr));
     const trace: Trace = { lang: this.lang, steps: this.steps, stdout: '' };
     try {
       if (this.lang === 'python') {
@@ -222,6 +262,11 @@ export class Interp {
     } catch (e) {
       if (e instanceof StepLimit) {
         trace.truncated = true;
+      } else if (e instanceof Thrown) {
+        const msg = `uncaught ${e.obj.cls}: ${e.message}`;
+        trace.error = { msg, line: e.line };
+        this.silent = 0;
+        this.pushStep(e.line, 'error', `ERROR: ${msg}`, `The ${e.obj.cls} thrown on line ${e.line} was not caught, so the program stops: ${e.message}`);
       } else {
         const msg = e instanceof RuntimeErr ? e.message : e instanceof Error ? e.message : String(e);
         const line = e instanceof RuntimeErr ? e.line : this.ln;
@@ -606,12 +651,101 @@ export class Interp {
         this.step(s.ln, 'write', `DELETE ${s.targets.length} item(s)`);
         return undefined;
       }
+      case 'throw': {
+        const v = s.e ? this.ev(s.e) : this.currentException;
+        if (!v) throw this.err('throw with no exception to rethrow');
+        const obj = this.toException(v);
+        const msg = String(obj.fields.get('message') ?? '');
+        this.step(s.ln, 'info', `THROW ${obj.cls}${msg ? `: ${msg}` : ''}`, undefined, undefined, undefined, undefined,
+          `Throw a ${obj.cls}${msg ? ` ("${msg}")` : ''}. The program jumps to the nearest matching catch.`);
+        throw new Thrown(obj, s.ln);
+      }
+      case 'try':
+        return this.execTry(s);
       case 'unsupported':
         throw this.err(`AlgoScope doesn't support ${s.what} yet`);
     }
   }
 
   noteKind?: StepKind;
+  currentException?: Obj;
+
+  makeException(cls: string, msg: Val): Obj {
+    const o = new Obj(cls);
+    const text = msg === undefined || msg === null ? '' : this.strOf(msg);
+    o.fields.set('message', text);
+    if (this.lang === 'csharp') o.fields.set('Message', text);
+    return o;
+  }
+
+  private toException(v: Val): Obj {
+    if (v instanceof Obj) return v;
+    if (v instanceof Special && v.kind.startsWith('class:')) return this.makeException(v.kind.slice(6), '');
+    if (typeof v === 'string') return this.makeException(this.lang === 'cpp' || this.lang === 'c' ? 'string' : 'Exception', v);
+    return this.makeException(typeName(v), this.strOf(v));
+  }
+
+  /** Errors the interpreter raises itself (index out of range...) as catchable exceptions. */
+  private errorAsException(e: RuntimeErr): Obj {
+    const m = e.message;
+    const L = this.lang;
+    const pick = (py: string, java: string, cs: string, cpp: string) => (L === 'python' ? py : L === 'java' ? java : L === 'csharp' ? cs : cpp);
+    let cls: string;
+    if (/out of (range|bounds)|index/i.test(m)) cls = pick('IndexError', 'ArrayIndexOutOfBoundsException', 'IndexOutOfRangeException', 'out_of_range');
+    else if (/division|modulo/i.test(m)) cls = pick('ZeroDivisionError', 'ArithmeticException', 'DivideByZeroException', 'runtime_error');
+    else if (/KeyError|key .* not found/i.test(m)) cls = pick('KeyError', 'NoSuchElementException', 'KeyNotFoundException', 'out_of_range');
+    else if (/null/i.test(m)) cls = pick('AttributeError', 'NullPointerException', 'NullReferenceException', 'runtime_error');
+    else if (/empty/i.test(m)) cls = pick('IndexError', 'EmptyStackException', 'InvalidOperationException', 'runtime_error');
+    else if (/convert|literal|parse/i.test(m)) cls = pick('ValueError', 'NumberFormatException', 'FormatException', 'invalid_argument');
+    else cls = pick('RuntimeError', 'RuntimeException', 'Exception', 'runtime_error');
+    return this.makeException(cls, m);
+  }
+
+  private isSubclass(cls: string, of: string): boolean {
+    let c: string | undefined = cls;
+    while (c) {
+      if (c === of) return true;
+      c = this.classes.get(c)?.def.base;
+    }
+    return false;
+  }
+
+  private execTry(s: Extract<Stmt, { k: 'try' }>): Completion {
+    let result: Completion;
+    let failed = false;
+    try {
+      result = this.execBlock(s.body);
+    } catch (e) {
+      if (!(e instanceof Thrown) && !(e instanceof RuntimeErr)) throw e;
+      const obj = e instanceof Thrown ? e.obj : this.errorAsException(e);
+      const h = s.handlers.find((hd) => hd.types === null || hd.types.some((t) => CATCH_ALL.has(t) || this.isSubclass(obj.cls, t) || t === obj.cls));
+      if (!h) throw e;
+      failed = true;
+      this.pushScope();
+      try {
+        if (h.name) this.declare(h.name, obj);
+        const save = this.currentException;
+        this.currentException = obj;
+        this.ln = h.ln;
+        this.step(h.ln, 'info', `CATCH ${obj.cls}`, undefined, undefined, undefined, undefined,
+          `The ${obj.cls} is caught here${obj.fields.get('message') ? ` (message: "${obj.fields.get('message')}")` : ''}, so the program continues.`);
+        try {
+          result = this.execList(h.body);
+        } finally {
+          this.currentException = save;
+        }
+      } finally {
+        this.popScope();
+      }
+    } finally {
+      if (s.finallyBody) {
+        const r = this.execBlock(s.finallyBody);
+        if (r) return r;
+      }
+    }
+    if (!failed && !result && s.elseBody) return this.execList(s.elseBody);
+    return result;
+  }
 
   private execBlockOrList(ss: Stmt[]): Completion {
     if (ss.length === 1 && ss[0].k === 'block') return this.exec(ss[0]);
@@ -675,8 +809,19 @@ export class Interp {
           this.step(s.ln, 'check', `FOR ${tname} in ${label} · loop finished`);
           break;
         }
-        if (this.lang === 'python' || s.target.k !== 'name') this.assignTo(s.target, n.v);
-        else this.declare(s.target.name, convert(n.v, s.ty), s.ty && s.ty.base !== 'auto' ? s.ty : undefined);
+        if (this.lang !== 'python' && s.target.k === 'list') {
+          // foreach (var (to, w) in edges): declare each part
+          const parts = this.iterToArray(n.v);
+          s.target.items.forEach((t, k) => t.k === 'name' && this.declare(t.name, parts[k]));
+        } else if (this.lang === 'python' || s.target.k !== 'name') this.assignTo(s.target, n.v);
+        else if (s.ty?.ref && it instanceof Arr) {
+          // for (auto& x : v): x is the element itself
+          const scopes = this.frame.scopes;
+          scopes[scopes.length - 1].set(s.target.name, new ElemCell(this, it, i - 1, `${label}[${i - 1}]`));
+        } else if (s.ty?.ref && typeof it === 'string' && this.lang === 'cpp') {
+          const scopes = this.frame.scopes;
+          scopes[scopes.length - 1].set(s.target.name, this.stringCell(s.iter, i - 1, `${label}[${i - 1}]`));
+        } else this.declare(s.target.name, convert(n.v, s.ty), s.ty && s.ty.base !== 'auto' ? s.ty : undefined);
         this.step(s.ln, 'assign', `FOR ${s.target.k === 'name' ? s.target.name : tname} = ${this.fmt(n.v)}`);
         const r = this.lang === 'python' ? this.execList(s.body) : this.execBlockOrList(s.body);
         if (r) {
@@ -720,6 +865,11 @@ export class Interp {
     }
     if (fr.self && this.lang !== 'python') {
       if (fr.self.fields.has(name)) return new FieldCell(fr.self, name, name);
+      const getter = this.lang === 'csharp' ? this.findMethod(fr.self.cls, `__get_${name}`, 0) : undefined;
+      if (getter) {
+        const self = fr.self;
+        return { get: () => this.invoke(getter, [], self), set: () => { throw this.err(`${name} is read-only`); }, label: () => name };
+      }
     }
     if (fr.cls) {
       const st = this.findStatic(fr.cls, name);
@@ -868,6 +1018,10 @@ export class Interp {
       }
       case 'kw': throw this.err('keyword argument used outside a call');
       case 'spread': throw this.err('*unpacking is only supported in function calls');
+      case 'declvar': {
+        this.declare(e.name, this.declDefault(e.ty) ?? convert(0, e.ty), e.ty.base === 'auto' ? undefined : e.ty);
+        return undefined;
+      }
       case 'cast': return this.castTo(e.ty, this.ev(e.e));
       case 'sizeof': return this.evSizeof(e);
       case 'lambda': {
@@ -1120,6 +1274,7 @@ export class Interp {
 
   deref(v: Val): Cell {
     if (v instanceof Ptr) return v.cell;
+    if (v instanceof Iter) return new ElemCell(this, v.arr, v.idx, `${this.arrName(v.arr)}[${v.idx}]`);
     if (v instanceof Arr) return new ElemCell(this, v, 0, `${this.arrName(v)}[0]`);
     if (v instanceof Obj) return { get: () => v, set: () => { throw this.err('cannot assign to *object'); }, label: () => `*${v.cls}` };
     if (v === null || v === undefined) throw this.err('null pointer dereference (the pointer is NULL)');
@@ -1182,6 +1337,15 @@ export class Interp {
       this.note = `${target.name} = ${this.fmt(nv)}`;
       return nv;
     }
+    if (target.k === 'index' && this.lang === 'cpp') {
+      const probe = this.ev(target.obj);
+      if (typeof probe === 'string') {
+        const cell = this.lv(target);
+        cell.set(v);
+        this.note = `${cell.label()} = ${this.fmt(cell.get())}`;
+        return cell.get();
+      }
+    }
     if (target.k === 'index') {
       const r = this.evIndexFull(target);
       this.writeIndexed(r.cont, r.key, v, r.label);
@@ -1243,6 +1407,7 @@ export class Interp {
           const idx = (r.cont.idx ?? 0) + num(r.key);
           return new ElemCell(this, r.cont.arr, idx, `${this.arrName(r.cont.arr)}[${idx}]`);
         }
+        if (typeof r.cont === 'string' && this.lang === 'cpp') return this.stringCell(e.obj, num(r.key), r.label);
         if (typeof r.cont === 'string') throw this.err('strings cannot be changed in place');
         throw this.err(`can't index into a ${typeName(r.cont)}`);
       }
@@ -1272,12 +1437,34 @@ export class Interp {
       case 'un':
         if (e.op === 'deref') return this.deref(this.ev(e.e));
         break;
+      case 'declvar': {
+        this.declare(e.name, undefined, e.ty.base === 'auto' ? undefined : e.ty);
+        return this.lookup(e.name)!;
+      }
       case 'this':
         break;
       default:
         break;
     }
     throw this.err('this expression cannot be assigned to');
+  }
+
+  /** A character of a C++ std::string as an assignable cell (s[i] = 'x'). */
+  stringCell(holderExpr: Expr, i: number, label: string): Cell {
+    const holder = this.lv(holderExpr);
+    return {
+      get: () => {
+        const s = holder.get() as string;
+        return new Chr(s.charCodeAt(i));
+      },
+      set: (v: Val) => {
+        const s = holder.get() as string;
+        if (i < 0 || i >= s.length) throw this.err(`index ${i} is out of range for a string of length ${s.length}`);
+        const ch = v instanceof Chr ? String.fromCharCode(v.c) : typeof v === 'string' ? v : String.fromCharCode(num(v));
+        holder.set(s.slice(0, i) + ch + s.slice(i + 1));
+      },
+      label: () => label,
+    };
   }
 
   private memberLabel(e: Extract<Expr, { k: 'member' }>): string {
@@ -1356,7 +1543,7 @@ export class Interp {
       this.writeElem(cont.arr, idx, v, `${this.arrName(cont.arr)}[${idx}]`);
       return;
     }
-    if (typeof cont === 'string') throw this.err(this.lang === 'python' ? "'str' object does not support item assignment" : 'strings cannot be changed in place');
+    if (typeof cont === 'string') throw this.err(this.lang === 'python' ? "'str' object does not support item assignment" : 'strings cannot be changed in place here');
     throw this.err(`can't index into a ${typeName(cont)}`);
   }
 
@@ -1395,6 +1582,12 @@ export class Interp {
     const k = keyOf(key);
     const e = m.entries.get(k);
     if (e) return e[1];
+    if (m.factory !== undefined) {
+      const v = m.factory === null ? null : this.callFnValue(m.factory, []);
+      m.entries.set(k, [key, v]);
+      m.version++;
+      return v;
+    }
     if (autoInsert) {
       const v: Val = 0;
       m.entries.set(k, [key, v]);
@@ -1463,6 +1656,8 @@ export class Interp {
     if (o instanceof Ptr && !o.arr) o = o.cell.get();
     if (o instanceof Obj) {
       if (o.fields.has(e.name)) return o.fields.get(e.name);
+      const getter = this.findMethod(o.cls, `__get_${e.name}`, 0);
+      if (getter) return this.invoke(getter, [], o);
       const m = this.findMethod(o.cls, e.name, -1);
       if (m) {
         const f = new FnV(e.name);
@@ -1498,8 +1693,22 @@ export class Interp {
         const f = new FnV(id.split('@')[0]);
         f.fn = this.prog.funcs[id][0];
         f.lambda = undefined;
-        (f as FnV & { closure?: Map<string, Cell>[] }).closure = [...this.frame.scopes];
+        (f as FnV & { closure?: Map<string, Cell>[] }).closure = [...this.frame.scopes, ...(this.frame.closure ?? [])];
+        f.self = this.frame.self;
         return f;
+      }
+      if (name === '__fieldinit__') {
+        // C++ constructor initializer list: adj(v) builds a vector, data(d) just stores d
+        const fname = (e.args[0] as { v: string }).v;
+        const t = this.frame.self?.fieldTys.get(fname);
+        if (t && !t.ptr && !t.arr && (isLibraryType(t.base) || t.base === 'string' || (this.classes.has(t.base) && e.args.length !== 2))) {
+          return this.constructType(t, e.args.slice(1));
+        }
+        if (t && !t.ptr && this.classes.has(t.base) && e.args.length === 2) {
+          const v = this.ev(e.args[1]);
+          return v instanceof Obj ? v : this.constructType(t, e.args.slice(1));
+        }
+        return e.args.length > 1 ? this.ev(e.args[1]) : 0;
       }
       if (this.lang === 'python') {
         const cell = this.lookup(name);
@@ -1507,11 +1716,13 @@ export class Interp {
         if (this.prog.classes[name]) return this.construct(name, e.args);
         const r = callFunction(this, name, e.args);
         if (r !== NF) return r as Val;
+        if (isExceptionName(name)) return this.makeException(name, e.args.length ? this.ev(e.args[0]) : '');
         throw this.err(`name '${name}' is not defined`);
       }
       const fr = this.frame;
       if (fr.cls) {
-        const m = this.findMethod(fr.cls, name, e.args.length);
+        // virtual dispatch: an inherited method calling name() uses the object's real class first
+        const m = (fr.self && this.findMethod(fr.self.cls, name, e.args.length)) || this.findMethod(fr.cls, name, e.args.length);
         if (m) return this.callUser(m, e.args, m.isStatic ? undefined : fr.self);
       }
       const fs = this.prog.funcs[name];
@@ -1521,6 +1732,7 @@ export class Interp {
       if (local) return this.callValue(local.get(), e.args, name);
       const r = callFunction(this, name, e.args);
       if (r !== NF) return r as Val;
+      if (isExceptionName(name)) return this.makeException(name, e.args.length ? this.ev(e.args[0]) : '');
       throw this.err(`function '${name}' is not defined`);
     }
     if (c.k === 'member') {
@@ -1530,6 +1742,13 @@ export class Interp {
       }
       if (c.obj.k === 'name' && c.obj.name === 'super' && this.frame.self) {
         const base = this.classes.get(this.frame.cls ?? '')?.def.base;
+        if (base && !this.classes.has(base) && isExceptionName(base) && c.name === '__init__') {
+          const msg = e.args.length ? this.ev(e.args[0]) : '';
+          const fresh = this.makeException(base, msg);
+          for (const [k, v] of fresh.fields) this.frame.self.fields.set(k, v);
+          this.frame.self.version++;
+          return undefined;
+        }
         if (base) {
           const m = c.name === '__init__' ? pickOverload(this.classes.get(base)!.def.ctors, e.args.length) : this.findMethod(base, c.name, e.args.length);
           if (m) return this.callUser(m, e.args, this.frame.self);
@@ -1557,6 +1776,7 @@ export class Interp {
   }
 
   callValue(fv: Val, args: Expr[], name: string): Val {
+    if (fv instanceof FnV && fv.native) return fv.native(args.map((a) => this.ev(a)));
     if (fv instanceof FnV) {
       if (fv.lambda) {
         const vals = args.map((a) => this.ev(a));
@@ -1590,8 +1810,9 @@ export class Interp {
 
   /** Call a user function from Values (used by builtins like sorted(key=...)). */
   callFnValue(fv: Val, vals: Val[]): Val {
+    if (fv instanceof FnV && fv.native) return fv.native(vals);
     if (fv instanceof FnV && fv.lambda) return this.callLambda(fv, vals);
-    if (fv instanceof FnV && fv.fn) return this.invoke(fv.fn, vals, fv.self);
+    if (fv instanceof FnV && fv.fn) return this.invoke(fv.fn, vals, fv.self, (fv as FnV & { closure?: Map<string, Cell>[] }).closure);
     if (fv instanceof Special) {
       const lits = vals.map((v) => ({ k: '__val', ln: this.ln, v }) as unknown as Expr);
       const r = callFunction(this, fv.kind, lits);
@@ -1622,13 +1843,30 @@ export class Interp {
         }
         throw this.err(`${fn.name}() is missing the argument '${p.name}'`);
       }
-      if (p.byRef) args.push(new RefArg(this.lv(ae)));
+      // a reference parameter binds to a variable; a temporary (literal, list, call) is passed by value
+      const lvalue = ae.k === 'name' || ae.k === 'index' || ae.k === 'member' || (ae.k === 'un' && ae.op === 'deref');
+      if (p.byRef && lvalue) args.push(new RefArg(this.lv(ae)));
       else args.push(this.ev(ae));
     });
     return this.invoke(fn, args, self, closure);
   }
 
-  invoke(fn: Func, args: (Val | RefArg)[], self: Obj | undefined, closure?: Map<string, Cell>[], isCtor = false): Val {
+  private memoTables = new Map<Func, Map<string, Val>>();
+
+  invoke(fn: Func, args: (Val | RefArg)[], self: Obj | undefined, closure?: Map<string, Cell>[], isCtor = false, skipMemo = false): Val {
+    if (fn.memo && !skipMemo) {
+      const table = this.memoTables.get(fn) ?? new Map<string, Val>();
+      this.memoTables.set(fn, table);
+      const key = args.map((a) => keyOf(a instanceof RefArg ? a.cell.get() : a)).join('|');
+      if (table.has(key)) {
+        const v = table.get(key);
+        this.note = `${fn.name}(…) returned ${this.fmt(v)} (remembered by @lru_cache)`;
+        return v;
+      }
+      const v = this.invoke(fn, args, self, closure, isCtor, true);
+      table.set(key, v);
+      return v;
+    }
     if (this.frames.length > this.maxDepth) {
       throw this.err(`too many nested calls (over ${this.maxDepth}) — stack overflow. Check the base case of ${fn.name}()`);
     }
@@ -1679,6 +1917,9 @@ export class Interp {
     const ctor = rt.def.ctors.length ? pickOverload(rt.def.ctors, argExprs.length) : undefined;
     if (ctor) {
       this.callUserCtor(ctor, argExprs, obj);
+    } else if (argExprs.length && this.isExceptionClass(clsName)) {
+      const msg = this.ev(argExprs[0]);
+      for (const [k, v] of this.makeException(clsName, msg).fields) obj.fields.set(k, v);
     } else if (argExprs.length) {
       // aggregate initialisation: Node{1, nullptr} / (struct Node){...}
       const fields = this.allFields(clsName).filter((f) => !f.isStatic);
@@ -1689,6 +1930,12 @@ export class Interp {
       throw this.err(`${clsName}() takes no arguments`);
     }
     return obj;
+  }
+
+  private isExceptionClass(cls: string): boolean {
+    let c: string | undefined = cls;
+    while (c && this.classes.has(c)) c = this.classes.get(c)!.def.base;
+    return !!c && isExceptionName(c);
   }
 
   private callUserCtor(fn: Func, argExprs: Expr[], obj: Obj) {
@@ -1875,6 +2122,7 @@ export class Interp {
     if (this.classes.has(t.base)) return this.construct(t.base, args);
     if (isLibraryType(t.base) || t.base === 'string' || t.base === 'pair') return libraryNew(this, t, args.map((a) => this.ev(a)), args);
     if (['int', 'double', 'char', 'bool'].includes(t.base)) return convert(args.length ? this.ev(args[0]) : 0, t);
+    if (isExceptionName(t.base)) return this.makeException(t.base, args.length ? this.ev(args[0]) : '');
     throw this.err(`unknown type '${t.base}'`);
   }
 

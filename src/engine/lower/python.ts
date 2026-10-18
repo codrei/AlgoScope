@@ -1,10 +1,10 @@
 // Python front-end.
 import type { Node } from 'web-tree-sitter';
-import { AUTO, type ClassDef, type CompClause, type Expr, type Func, type Param, type Program, type Stmt } from '../ir';
+import { AUTO, type CatchClause, type ClassDef, type CompClause, type Expr, type Func, type Param, type Program, type Stmt } from '../ir';
 import { allKids, collectIndexVars, endLineOf, f, fields, kids, lineOf, parseNumber, unescape, unsupported } from './util';
 
 export function lowerPython(root: Node): Program {
-  const prog: Program = { lang: 'python', funcs: {}, classes: {}, globals: [] };
+  const prog: Program = { lang: 'python', funcs: Object.create(null), classes: Object.create(null), globals: [] };
 
   function params(n: Node | null, skipSelf: boolean): Param[] {
     if (!n) return [];
@@ -24,7 +24,7 @@ export function lowerPython(root: Node): Program {
     return out;
   }
 
-  function funcDef(n: Node, cls?: string): Func {
+  function funcDef(n: Node, cls?: string, decorators = ''): Func {
     const body = block(f(n, 'body')!);
     const globals: string[] = [];
     const scan = (ss: Stmt[]) => ss.forEach((s) => {
@@ -32,7 +32,8 @@ export function lowerPython(root: Node): Program {
       if (s.k === 'block') scan(s.body);
     });
     scan(body);
-    const isStaticMethod = !!n.parent && n.parent.type === 'decorated_definition' && /@staticmethod/.test(n.parent.text);
+    const deco = decorators;
+    const isStaticMethod = /@staticmethod/.test(deco);
     const fn: Func = {
       name: f(n, 'name')!.text,
       params: params(f(n, 'parameters'), !!cls && !isStaticMethod),
@@ -44,13 +45,14 @@ export function lowerPython(root: Node): Program {
       cls,
       indexVars: collectIndexVars(body),
       globals,
+      memo: /@(?:functools\.)?(?:lru_cache|cache)\b/.test(deco) || undefined,
     };
     return fn;
   }
 
   function classDef(n: Node) {
     const name = f(n, 'name')!.text;
-    const cls: ClassDef = { name, fields: [], methods: {}, ctors: [], ln: lineOf(n) };
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
     const sup = f(n, 'superclasses');
     if (sup) {
       const b = kids(sup)[0];
@@ -58,9 +60,13 @@ export function lowerPython(root: Node): Program {
     }
     prog.classes[name] = cls;
     for (let m of kids(f(n, 'body')!)) {
-      if (m.type === 'decorated_definition') m = f(m, 'definition')!;
+      let deco = '';
+      if (m.type === 'decorated_definition') {
+        deco = kids(m).filter((k) => k.type === 'decorator').map((k) => k.text).join(' ');
+        m = f(m, 'definition')!;
+      }
       if (m.type === 'function_definition') {
-        const fn = funcDef(m, name);
+        const fn = funcDef(m, name, deco);
         if (fn.name === '__init__') cls.ctors.push(fn);
         else (cls.methods[fn.name] ??= []).push(fn);
       } else if (m.type === 'expression_statement') {
@@ -143,8 +149,17 @@ export function lowerPython(root: Node): Program {
           e: { k: 'assign', ln, op: '=', target: { k: 'name', ln, name: fn.name }, value: { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] } },
         }];
       }
-      case 'decorated_definition':
-        return stmt(f(n, 'definition')!);
+      case 'decorated_definition': {
+        const def = f(n, 'definition')!;
+        if (def.type !== 'function_definition') return stmt(def);
+        const fn = funcDef(def, undefined, kids(n).filter((k) => k.type === 'decorator').map((k) => k.text).join(' '));
+        const id = `${fn.name}@${fn.ln}`;
+        (prog.funcs[id] ??= []).push(fn);
+        return [{
+          k: 'expr', ln,
+          e: { k: 'assign', ln, op: '=', target: { k: 'name', ln, name: fn.name }, value: { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] } },
+        }];
+      }
       case 'class_definition':
         classDef(n);
         return [];
@@ -155,11 +170,35 @@ export function lowerPython(root: Node): Program {
       case 'assert_statement':
         return [];
       case 'try_statement': {
-        const b = f(n, 'body');
-        return b ? [{ k: 'block', ln, body: block(b) }] : [];
+        const handlers: CatchClause[] = [];
+        let elseBody: Stmt[] | undefined;
+        let finallyBody: Stmt[] | undefined;
+        for (const c of kids(n)) {
+          if (c.type === 'except_clause' || c.type === 'except_group_clause') {
+            const blk = kids(c).find((k) => k.type === 'block');
+            let types: string[] | null = null;
+            let name: string | undefined;
+            for (const k of kids(c)) {
+              if (k === blk || k.type === 'block') continue;
+              if (k.type === 'as_pattern') {
+                const tgt = kids(k).find((x) => x.type === 'as_pattern_target');
+                name = tgt?.text;
+                types = typeNames(kids(k)[0]);
+              } else if (k.type === 'as_pattern_target') name = k.text;
+              else if (types === null) types = typeNames(k);
+            }
+            const alias = f(c, 'alias');
+            if (alias) name = alias.text;
+            handlers.push({ types, name, ln: lineOf(c), body: blk ? block(blk) : [] });
+          } else if (c.type === 'else_clause') elseBody = block(f(c, 'body') ?? kids(c)[0]);
+          else if (c.type === 'finally_clause') finallyBody = block(kids(c).find((k) => k.type === 'block')!);
+        }
+        return [{ k: 'try', ln, body: block(f(n, 'body')!), handlers, elseBody, finallyBody }];
       }
-      case 'raise_statement':
-        return [{ k: 'unsupported', ln, what: 'raise (exceptions)' }];
+      case 'raise_statement': {
+        const e = kids(n)[0];
+        return [{ k: 'throw', ln, e: e ? expr(e) : undefined }];
+      }
       case 'with_statement':
         return unsupported(n, 'with statements');
       case 'match_statement':
@@ -167,6 +206,11 @@ export function lowerPython(root: Node): Program {
       default:
         return unsupported(n);
     }
+  }
+
+  function typeNames(n: Node): string[] {
+    if (n.type === 'tuple' || n.type === 'parenthesized_expression') return kids(n).flatMap(typeNames);
+    return [n.text.split('.').pop()!];
   }
 
   function target(n: Node): Expr {
@@ -329,8 +373,17 @@ export function lowerPython(root: Node): Program {
         const c = comprehension(n);
         return { k: 'call', ln, callee: { k: 'name', ln, name: 'set' }, args: [c] };
       }
-      case 'dictionary_comprehension':
-        return unsupported(n, 'dictionary comprehensions');
+      case 'dictionary_comprehension': {
+        // {k: v for ...} -> dict([(k, v) for ...])
+        const pair = f(n, 'body')!;
+        const clauses: CompClause[] = [];
+        for (const c of kids(n)) {
+          if (c.type === 'for_in_clause') clauses.push({ kind: 'for', target: target(f(c, 'left')!), iter: expr(fields(c, 'right')[0]) });
+          else if (c.type === 'if_clause') clauses.push({ kind: 'if', c: expr(kids(c)[0]) });
+        }
+        const body: Expr = { k: 'list', ln, kind: 'tuple', items: [expr(f(pair, 'key')!), expr(f(pair, 'value')!)] };
+        return { k: 'call', ln, callee: { k: 'name', ln, name: 'dict' }, args: [{ k: 'listcomp', ln, body, clauses }] };
+      }
       case 'conditional_expression': {
         const [t, c, e] = kids(n);
         return { k: 'cond', ln, c: expr(c), t: expr(t), f: expr(e) };
@@ -366,9 +419,13 @@ export function lowerPython(root: Node): Program {
   }
 
   for (let n of kids(root)) {
-    if (n.type === 'decorated_definition') n = f(n, 'definition')!;
+    let deco = '';
+    if (n.type === 'decorated_definition') {
+      deco = kids(n).filter((k) => k.type === 'decorator').map((k) => k.text).join(' ');
+      n = f(n, 'definition')!;
+    }
     if (n.type === 'function_definition') {
-      const fn = funcDef(n);
+      const fn = funcDef(n, undefined, deco);
       (prog.funcs[fn.name] ??= []).push(fn);
     } else if (n.type === 'class_definition') classDef(n);
     else prog.globals.push(...stmt(n));

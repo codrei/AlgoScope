@@ -49,6 +49,12 @@ function csDouble(x: number): string {
   return s.replace(/e\+?/, 'E+').replace('E+-', 'E-');
 }
 
+/** Lets the interpreter print objects with their own toString() / ToString() / __str__. */
+let objTextHook: ((o: Obj, repr: boolean) => string | undefined) | null = null;
+export function setObjTextHook(h: typeof objTextHook) {
+  objTextHook = h;
+}
+
 export interface StreamState {
   fixed: boolean;
   precision: number;
@@ -92,6 +98,8 @@ export function toText(v: Val, lang: Lang, st?: StreamState): string {
     return '0x' + (0x7ffe1000 + v.id * 16).toString(16);
   }
   if (v instanceof Obj) {
+    const custom = objTextHook?.(v, false);
+    if (custom !== undefined) return custom;
     if (v.cls === 'pair') return `(${toText(v.fields.get('first'), lang)}, ${toText(v.fields.get('second'), lang)})`;
     if (lang === 'java') return `${v.cls}@${(0x4e25154f + v.id * 131).toString(16)}`;
     if (lang === 'csharp') return v.cls;
@@ -112,6 +120,7 @@ export function toText(v: Val, lang: Lang, st?: StreamState): string {
 
 /** Python repr(). */
 export function pyRepr(v: Val): string {
+  if (v instanceof Obj) return objTextHook?.(v, true) ?? `<__main__.${v.cls} object>`;
   if (typeof v === 'string') {
     const q = v.includes("'") && !v.includes('"') ? '"' : "'";
     return q + v.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(new RegExp(q, 'g'), '\\' + q) + q;
@@ -137,7 +146,7 @@ export function pyStr(v: Val): string {
     if (v.isSet) return items.length ? '{' + items.map(([k]) => pyRepr(k)).join(', ') + '}' : 'set()';
     return '{' + items.map(([k, x]) => `${pyRepr(k)}: ${pyRepr(x)}`).join(', ') + '}';
   }
-  if (v instanceof Obj) return `<${v.cls} object>`;
+  if (v instanceof Obj) return objTextHook?.(v, false) ?? `<__main__.${v.cls} object>`;
   if (v instanceof RangeV) return v.step === 1 ? `range(${v.start}, ${v.stop})` : `range(${v.start}, ${v.stop}, ${v.step})`;
   if (v instanceof FnV) return `<function ${v.name}>`;
   return String(v);

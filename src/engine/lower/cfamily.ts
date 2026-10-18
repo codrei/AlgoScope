@@ -1,6 +1,6 @@
 // C and C++ front-end (both parsed with the tree-sitter C++ grammar).
 import type { Node } from 'web-tree-sitter';
-import type { ClassDef, Expr, FieldDef, Func, Lang, Param, Program, Stmt, Ty, VarDeclItem } from '../ir';
+import type { CatchClause, ClassDef, Expr, FieldDef, Func, Lang, Param, Program, Stmt, Ty, VarDeclItem } from '../ir';
 import { AUTO, CompileError } from '../ir';
 import {
   allKids, collectIndexVars, endLineOf, f, fail, fields, kids, lineOf, parseNumber, primName, ty, unescape, unsupported,
@@ -17,10 +17,20 @@ interface Declarator {
 }
 
 export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swapped: Set<number> }): Program {
-  const prog: Program = { lang, funcs: {}, classes: {}, globals: [] };
+  const prog: Program = { lang, funcs: Object.create(null), classes: Object.create(null), globals: [] };
   // source text of a node, with any protected '<' restored
   const txt = (n: Node) => (fix ? fix.source.slice(n.startIndex, n.endIndex) : n.text);
   const typedefs = new Map<string, string>();
+  // template type parameters (T, U...) are treated as "any type"
+  const typeParams = new Set<string>();
+  const templateParams = (n: Node) => {
+    const ps = f(n, 'parameters');
+    if (ps) for (const p of kids(ps)) {
+      const id = kids(p).find((k) => k.type === 'type_identifier');
+      if (id) typeParams.add(id.text);
+    }
+  };
+  let lambdaSeq = 0;
 
   // ---------- types ----------
   function typeOf(n: Node | null): Ty {
@@ -30,6 +40,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
       case 'sized_type_specifier':
         return ty(primName(n.text));
       case 'type_identifier': {
+        if (typeParams.has(n.text)) return AUTO;
         const t = typedefs.get(n.text) ?? n.text;
         return ty(primName(t));
       }
@@ -165,7 +176,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
     const nameNode = f(n, 'name');
     const name = nameNode ? nameNode.text : `anon${lineOf(n)}`;
     if (prog.classes[name]) return;
-    const cls: ClassDef = { name, fields: [], methods: {}, ctors: [], ln: lineOf(n) };
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
     prog.classes[name] = cls;
     const baseClause = kids(n).find((k) => k.type === 'base_class_clause');
     if (baseClause) {
@@ -205,7 +216,16 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
           break;
         }
         case 'access_specifier':
-        case 'template_declaration':
+        case 'template_declaration': {
+          templateParams(m);
+          const inner = kids(m).find((k) => k.type === 'function_definition');
+          if (inner) {
+            const fn = funcDef(inner, name);
+            if (fn.name === name) cls.ctors.push(fn);
+            else (cls.methods[fn.name] ??= []).push(fn);
+          }
+          break;
+        }
         case 'friend_declaration':
         case 'using_declaration':
         case 'alias_declaration':
@@ -235,7 +255,10 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
           e: {
             k: 'assign', ln: lineOf(fi), op: '=',
             target: { k: 'member', ln: lineOf(fi), obj: { k: 'this', ln: lineOf(fi) }, name: fname.text },
-            value: a.length ? a[0] : { k: 'num', ln: lineOf(fi), v: 0, float: false },
+            value: {
+              k: 'call', ln: lineOf(fi), callee: { k: 'name', ln: lineOf(fi), name: '__fieldinit__' },
+              args: [{ k: 'str', ln: lineOf(fi), v: fname.text }, ...a],
+            },
           },
         });
       }
@@ -361,11 +384,26 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         return [];
       }
       case 'try_statement': {
-        const b = f(n, 'body');
-        return b ? bodyOf(b) : [];
+        const handlers: CatchClause[] = [];
+        for (const c of kids(n)) {
+          if (c.type !== 'catch_clause') continue;
+          const ps = f(c, 'parameters');
+          const pd = ps && kids(ps).find((k) => k.type === 'parameter_declaration');
+          const t = pd && f(pd, 'type');
+          const dn = pd && f(pd, 'declarator');
+          handlers.push({
+            types: t ? [t.text.replace(/^std::/, '')] : null,
+            name: dn ? unwrap(dn).name : undefined,
+            ln: lineOf(c),
+            body: block(f(c, 'body')!),
+          });
+        }
+        return [{ k: 'try', ln, body: block(f(n, 'body')!), handlers }];
       }
-      case 'throw_statement':
-        return [{ k: 'unsupported', ln, what: 'throw (exceptions)' }];
+      case 'throw_statement': {
+        const e = kids(n)[0];
+        return [{ k: 'throw', ln, e: e ? expr(e) : undefined }];
+      }
       case 'labeled_statement':
       case 'goto_statement':
         return unsupported(n, 'goto/labels');
@@ -388,7 +426,7 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         const alias = fields(n, 'declarator').map((d) => unwrap(d).name)[0];
         if (alias) {
           const fake = alias;
-          const cls: ClassDef = { name: fake, fields: [], methods: {}, ctors: [], ln: lineOf(n) };
+          const cls: ClassDef = { name: fake, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
           prog.classes[fake] = cls;
           for (const m of kids(f(t, 'body')!)) {
             if (m.type !== 'field_declaration') continue;
@@ -558,7 +596,12 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
       case 'sizeof_expression': {
         const t = f(n, 'type');
         if (t) return { k: 'sizeof', ln, ty: typeOf(t) };
-        return { k: 'sizeof', ln, e: expr(f(n, 'value')!) };
+        const v = f(n, 'value')!;
+        const inner = v.type === 'parenthesized_expression' ? kids(v)[0] : v;
+        if (inner && inner.type === 'identifier' && (typedefs.has(inner.text) || prog.classes[inner.text])) {
+          return { k: 'sizeof', ln, ty: ty(typedefs.get(inner.text) ?? inner.text) };
+        }
+        return { k: 'sizeof', ln, e: expr(v) };
       }
       case 'new_expression': {
         const t = typeOf(f(n, 'type'));
@@ -587,8 +630,19 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         const v = f(n, 'value')!;
         return { k: 'newobj', ln, ty: typeOf(f(n, 'type')), args: kids(v).map(expr) };
       }
-      case 'lambda_expression':
-        return unsupported(n, 'lambda expressions');
+      case 'lambda_expression': {
+        // a lambda becomes a nested function that captures the surrounding variables
+        const decl = f(n, 'declarator');
+        const body = f(n, 'body')!;
+        const stmts = block(body);
+        const fn: Func = {
+          name: 'lambda', params: params(decl ? (f(decl, 'parameters') ?? undefined) : undefined), body: stmts,
+          ln, endLn: endLineOf(n), retTy: AUTO, isStatic: true, indexVars: collectIndexVars(stmts),
+        };
+        const id = `lambda@${ln}:${n.startPosition.column}:${lambdaSeq++}`;
+        prog.funcs[id] = [fn];
+        return { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] };
+      }
       case 'char':
         return { k: 'char', ln, v: n.text.charCodeAt(0) };
       default:
@@ -646,9 +700,12 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
         if (body) kids(body).forEach(top);
         break;
       }
-      case 'template_declaration':
-        unsupported(n, 'templates');
+      case 'template_declaration': {
+        templateParams(n);
+        const inner = kids(n).find((k) => k.type !== 'template_parameter_list');
+        if (inner && inner.type !== 'class_specifier' && inner.type !== 'struct_specifier') top(inner);
         break;
+      }
       case 'expression_statement':
         if (kids(n).length) unsupported(n, 'code outside of a function');
         break;
@@ -662,6 +719,11 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
   for (const n of tops) {
     if (n.type === 'type_definition') typedef(n);
     if (n.type === 'struct_specifier' || n.type === 'class_specifier') defineClass(n);
+    if (n.type === 'template_declaration') {
+      templateParams(n);
+      const inner = kids(n).find((k) => k.type === 'class_specifier' || k.type === 'struct_specifier');
+      if (inner) defineClass(inner);
+    }
   }
   for (const n of tops) {
     if (n.type === 'type_definition' || n.type === 'struct_specifier' || n.type === 'class_specifier') continue;

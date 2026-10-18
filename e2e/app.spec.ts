@@ -97,7 +97,9 @@ test('a syntax error points at the line', async ({ page }) => {
   await fresh(page, '?example=factorial&lang=cpp');
   await page.locator('.monaco-editor').click();
   await page.keyboard.press('Control+A');
-  await page.keyboard.type('int main() {\nint x = 5\nreturn 0;\n');
+  // paste in one go (typing races with the editor's auto-closing brackets)
+  await page.keyboard.insertText('int main() {\nint x = 5\nreturn 0;\n}\n');
+  await expect(page.locator('.monaco-editor .view-lines')).toContainText('int x = 5');
   await page.getByRole('button', { name: 'Run' }).click();
   await expect(page.locator('.compile-error')).toContainText('Line 2');
 });

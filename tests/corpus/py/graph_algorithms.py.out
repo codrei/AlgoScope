@@ -1,0 +1,3 @@
+MST: [(2, 3, 4), (0, 3, 5), (0, 1, 10)] weight 19
+Topo: ['socks', 'pants', 'shoes', 'shirt', 'tie', 'jacket']
+10 solutions; first: [0, 2, 4, 1, 3]

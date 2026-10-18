@@ -26,7 +26,9 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 ```bash
 npm install
 npm run dev      # development server
-npm test         # runs every example in every language
+npm test         # every example in every language + the compiler-checked corpus
+npm run e2e      # click-through interface tests (Playwright)
+./scripts/reference-outputs.sh   # re-record real compiler outputs for tests/corpus (needs gcc, g++, JDK, .NET, python3)
 npm run build    # production build in dist/
 ```
 

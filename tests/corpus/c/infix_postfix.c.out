@@ -1,0 +1,3 @@
+Infix: a+b*(c^d-e)^(f+g*h)-i
+Postfix: abcd^e-fgh*+^*+i-
+Value of 231*+9- = -4

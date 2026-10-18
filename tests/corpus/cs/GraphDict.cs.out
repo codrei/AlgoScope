@@ -1,0 +1,7 @@
+BFS: 1 2 3 4 5
+Path 1->5: True
+Path 1->7: False
+Ana    90
+Ben    75
+Cy     82
+Ben has 75

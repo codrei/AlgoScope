@@ -1,0 +1,4 @@
+Queue full, cannot add 5
+Queue: 1 2 3 4
+Dequeued 1 and 2
+Queue: 3 4 6 7

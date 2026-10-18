@@ -1,0 +1,6 @@
+Vertex 0: 4 1
+Vertex 1: 4 3 2 0
+Vertex 2: 3 1
+Vertex 3: 4 2 1
+Vertex 4: 3 1 0
+BFS from 0: 0 4 1 3 2

@@ -1,10 +1,47 @@
 // Java front-end.
 import type { Node } from 'web-tree-sitter';
-import { AUTO, CompileError, type ClassDef, type Expr, type Func, type Param, type Program, type Stmt, type Ty, type VarDeclItem } from '../ir';
+import { AUTO, CompileError, type CatchClause, type ClassDef, type Expr, type Func, type Param, type Program, type Stmt, type Ty, type VarDeclItem } from '../ir';
 import { allKids, collectIndexVars, endLineOf, f, fields, kids, lineOf, parseNumber, primName, ty, unescape, unsupported } from './util';
 
 export function lowerJava(root: Node): Program {
-  const prog: Program = { lang: 'java', funcs: {}, classes: {}, globals: [] };
+  const prog: Program = { lang: 'java', funcs: Object.create(null), classes: Object.create(null), globals: [] };
+  let lambdaSeq = 0;
+
+  /** A lambda becomes a nested function that captures the surrounding variables. */
+  function lambda(n: Node): Expr {
+    const ln = lineOf(n);
+    const ps = f(n, 'parameters')!;
+    let names: string[];
+    if (ps.type === 'identifier') names = [ps.text];
+    else if (ps.type === 'formal_parameters') names = kids(ps).map((p) => f(p, 'name')!.text);
+    else names = kids(ps).filter((k) => k.type === 'identifier').map((k) => k.text);
+    const body = f(n, 'body')!;
+    const stmts: Stmt[] = body.type === 'block' ? kids(body).flatMap(stmt) : [{ k: 'return', ln: lineOf(body), e: expr(body) }];
+    const id = `lambda@${ln}:${n.startPosition.column}:${lambdaSeq++}`;
+    prog.funcs[id] = [{
+      name: 'lambda', params: names.map((x) => ({ name: x, ty: AUTO, byRef: false })), body: stmts,
+      ln, endLn: endLineOf(n), retTy: AUTO, isStatic: true, indexVars: collectIndexVars(stmts),
+    }];
+    return { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] };
+  }
+
+  function defineEnum(n: Node) {
+    const name = f(n, 'name')!.text;
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
+    const body = f(n, 'body');
+    if (body) for (const c of kids(body)) {
+      if (c.type === 'enum_constant') {
+        const id = f(c, 'name')!.text;
+        cls.fields.push({ name: id, ty: ty('string'), isStatic: true, init: { k: 'str', ln: lineOf(c), v: id } });
+      }
+    }
+    prog.classes[name] = cls;
+  }
+
+  function defineInterface(n: Node) {
+    const name = f(n, 'name')!.text;
+    prog.classes[name] = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
+  }
 
   function typeOf(n: Node | null): Ty {
     if (!n) return AUTO;
@@ -50,7 +87,7 @@ export function lowerJava(root: Node): Program {
 
   function defineClass(n: Node) {
     const name = f(n, 'name')!.text;
-    const cls: ClassDef = { name, fields: [], methods: {}, ctors: [], ln: lineOf(n) };
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
     const sup = f(n, 'superclass');
     if (sup) cls.base = kids(sup)[0]?.text;
     prog.classes[name] = cls;
@@ -81,8 +118,10 @@ export function lowerJava(root: Node): Program {
           defineClass(m);
           break;
         case 'interface_declaration':
+          defineInterface(m);
+          break;
         case 'enum_declaration':
-          unsupported(m, 'interfaces/enums');
+          defineEnum(m);
           break;
         default:
           break;
@@ -146,6 +185,13 @@ export function lowerJava(root: Node): Program {
         return [localDecl(n)];
       case 'expression_statement':
         return [{ k: 'expr', ln, e: expr(kids(n)[0]) }];
+      case 'explicit_constructor_invocation': {
+        // super(args) / this(args) inside a constructor
+        const target = kids(n)[0];
+        const args = kids(f(n, 'arguments') ?? kids(n)[kids(n).length - 1]).map(expr);
+        const who = target && target.text === 'this' ? 'this' : 'super';
+        return [{ k: 'expr', ln, e: { k: 'call', ln, callee: { k: 'member', ln, obj: { k: 'name', ln, name: who }, name: '__init__' }, args } }];
+      }
       case 'if_statement': {
         const c = cond(f(n, 'condition')!);
         const alt = f(n, 'alternative');
@@ -205,11 +251,23 @@ export function lowerJava(root: Node): Program {
       }
       case 'try_statement':
       case 'try_with_resources_statement': {
-        const b = f(n, 'body');
-        return b ? bodyOf(b) : [];
+        const handlers: CatchClause[] = [];
+        let finallyBody: Stmt[] | undefined;
+        for (const c of kids(n)) {
+          if (c.type === 'catch_clause') {
+            const p = kids(c).find((k) => k.type === 'catch_formal_parameter');
+            const ct = p && kids(p).find((k) => k.type === 'catch_type');
+            const types = ct ? kids(ct).map((k) => k.text.split('.').pop()!) : null;
+            const blk = f(c, 'body') ?? kids(c).find((k) => k.type === 'block')!;
+            handlers.push({ types, name: p ? f(p, 'name')?.text : undefined, ln: lineOf(c), body: kids(blk).flatMap(stmt) });
+          } else if (c.type === 'finally_clause') {
+            finallyBody = kids(kids(c).find((k) => k.type === 'block')!).flatMap(stmt);
+          }
+        }
+        return [{ k: 'try', ln, body: kids(f(n, 'body')!).flatMap(stmt), handlers, finallyBody }];
       }
       case 'throw_statement':
-        return [{ k: 'unsupported', ln, what: 'throw (exceptions)' }];
+        return [{ k: 'throw', ln, e: expr(kids(n)[0]) }];
       case 'local_class_declaration':
       case 'class_declaration':
         defineClass(n);
@@ -304,7 +362,7 @@ export function lowerJava(root: Node): Program {
       case 'instanceof_expression':
         return unsupported(n, 'instanceof');
       case 'lambda_expression':
-        return unsupported(n, 'lambda expressions');
+        return lambda(n);
       case 'method_reference':
         return unsupported(n, 'method references');
       case 'class_literal':
@@ -316,7 +374,8 @@ export function lowerJava(root: Node): Program {
 
   for (const n of kids(root)) {
     if (n.type === 'class_declaration' || n.type === 'record_declaration') defineClass(n);
-    else if (n.type === 'interface_declaration' || n.type === 'enum_declaration') unsupported(n, 'interfaces/enums');
+    else if (n.type === 'interface_declaration') defineInterface(n);
+    else if (n.type === 'enum_declaration') defineEnum(n);
   }
   if (!prog.entry) throw new CompileError('No main method found. Add `public static void main(String[] args) { ... }` inside a class.', 1);
   return prog;

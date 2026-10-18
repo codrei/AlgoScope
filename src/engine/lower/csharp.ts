@@ -1,10 +1,38 @@
 // C# front-end.
 import type { Node } from 'web-tree-sitter';
-import { AUTO, CompileError, type ClassDef, type Expr, type Func, type Param, type Program, type Stmt, type Ty, type VarDeclItem } from '../ir';
+import { AUTO, CompileError, type CatchClause, type ClassDef, type Expr, type Func, type Param, type Program, type Stmt, type Ty, type VarDeclItem } from '../ir';
 import { allKids, collectIndexVars, endLineOf, f, fields, kids, lineOf, parseNumber, primName, ty, unescape, unsupported } from './util';
 
 export function lowerCSharp(root: Node): Program {
-  const prog: Program = { lang: 'csharp', funcs: {}, classes: {}, globals: [] };
+  const prog: Program = { lang: 'csharp', funcs: Object.create(null), classes: Object.create(null), globals: [] };
+  let lambdaSeq = 0;
+
+  function lambda(n: Node): Expr {
+    const ln = lineOf(n);
+    const ps = f(n, 'parameters') ?? kids(n).find((k) => k.type === 'identifier' || k.type === 'parameter_list')!;
+    const names = ps.type === 'identifier' ? [ps.text] : kids(ps).map((p) => (f(p, 'name') ?? p).text);
+    const body = f(n, 'body')!;
+    const stmts: Stmt[] = body.type === 'block' ? kids(body).flatMap(stmt) : [{ k: 'return', ln: lineOf(body), e: expr(body) }];
+    const id = `lambda@${ln}:${n.startPosition.column}:${lambdaSeq++}`;
+    prog.funcs[id] = [{
+      name: 'lambda', params: names.map((x) => ({ name: x, ty: AUTO, byRef: false })), body: stmts,
+      ln, endLn: endLineOf(n), retTy: AUTO, isStatic: true, indexVars: collectIndexVars(stmts),
+    }];
+    return { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] };
+  }
+
+  function defineEnum(n: Node) {
+    const name = f(n, 'name')!.text;
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
+    const body = f(n, 'body');
+    if (body) for (const c of kids(body)) {
+      if (c.type === 'enum_member_declaration') {
+        const id = (f(c, 'name') ?? kids(c)[0]).text;
+        cls.fields.push({ name: id, ty: ty('string'), isStatic: true, init: { k: 'str', ln: lineOf(c), v: id } });
+      }
+    }
+    prog.classes[name] = cls;
+  }
   const topLevel: Stmt[] = [];
 
   function typeOf(n: Node | null): Ty {
@@ -58,7 +86,7 @@ export function lowerCSharp(root: Node): Program {
 
   function defineClass(n: Node) {
     const name = f(n, 'name')!.text;
-    const cls: ClassDef = { name, fields: [], methods: {}, ctors: [], ln: lineOf(n) };
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
     const bases = kids(n).find((k) => k.type === 'base_list');
     if (bases) cls.base = kids(bases)[0]?.text;
     prog.classes[name] = cls;
@@ -78,7 +106,27 @@ export function lowerCSharp(root: Node): Program {
           const st = mods(m).includes('static');
           const t = typeOf(f(m, 'type'));
           const v = f(m, 'value');
-          cls.fields.push({ name: f(m, 'name')!.text, ty: t, isStatic: st, init: v ? expr(v) : undefined });
+          const pname = f(m, 'name')!.text;
+          // computed properties (=> expr, or get { ... }) become getter methods
+          let getter: Stmt[] | null = null;
+          if (v && v.type === 'arrow_expression_clause') getter = [{ k: 'return', ln: lineOf(v), e: expr(kids(v)[0]) }];
+          const acc = f(m, 'accessors');
+          if (acc) {
+            const get = kids(acc).find((a) => a.text.startsWith('get') && (f(a, 'body') || kids(a).some((k) => k.type === 'arrow_expression_clause')));
+            if (get) {
+              const b = f(get, 'body');
+              const arrow = kids(get).find((k) => k.type === 'arrow_expression_clause');
+              getter = b ? kids(b).flatMap(stmt) : [{ k: 'return', ln: lineOf(arrow!), e: expr(kids(arrow!)[0]) }];
+            }
+          }
+          if (getter) {
+            cls.methods[`__get_${pname}`] = [{
+              name: pname, params: [], body: getter, ln: lineOf(m), endLn: endLineOf(m), retTy: t, isStatic: st, cls: name,
+              indexVars: collectIndexVars(getter),
+            }];
+            break;
+          }
+          cls.fields.push({ name: pname, ty: t, isStatic: st, init: v ? expr(v) : undefined });
           break;
         }
         case 'method_declaration': {
@@ -96,8 +144,10 @@ export function lowerCSharp(root: Node): Program {
           defineClass(m);
           break;
         case 'interface_declaration':
+          prog.classes[f(m, 'name')!.text] = { name: f(m, 'name')!.text, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(m) };
+          break;
         case 'enum_declaration':
-          unsupported(m, 'interfaces/enums');
+          defineEnum(m);
           break;
         default:
           break;
@@ -138,6 +188,24 @@ export function lowerCSharp(root: Node): Program {
     return stmt(n);
   }
 
+  /** The grammar reads "g.Add((u, v));" as a declaration; turn it back into the call. */
+  function misparsedCall(vd: Node): Expr | null {
+    const t = f(vd, 'type');
+    const d = kids(vd).find((k) => k.type === 'variable_declarator');
+    if (!t || t.type !== 'qualified_name' || !d) return null;
+    const pat = kids(d)[0];
+    if (!pat || pat.type !== 'tuple_pattern') return null;
+    const ln = lineOf(vd);
+    const parts = t.text.split('.');
+    const toArg = (p: Node): Expr =>
+      p.type === 'tuple_pattern'
+        ? { k: 'list', ln, kind: 'tuple', items: kids(p).map(toArg) }
+        : { k: 'name', ln, name: p.text };
+    let callee: Expr = { k: 'name', ln, name: parts[0] };
+    for (const part of parts.slice(1)) callee = { k: 'member', ln, obj: callee, name: part };
+    return { k: 'call', ln, callee, args: kids(pat).map(toArg) };
+  }
+
   function varDecl(vd: Node): Stmt {
     const t = typeOf(f(vd, 'type'));
     const decls: VarDeclItem[] = kids(vd)
@@ -171,8 +239,12 @@ export function lowerCSharp(root: Node): Program {
     switch (n.type) {
       case 'block':
         return [{ k: 'block', ln, body: kids(n).flatMap(stmt) }];
-      case 'local_declaration_statement':
-        return [varDecl(kids(n).find((k) => k.type === 'variable_declaration')!)];
+      case 'local_declaration_statement': {
+        const vd = kids(n).find((k) => k.type === 'variable_declaration')!;
+        const misparsed = misparsedCall(vd);
+        if (misparsed) return [{ k: 'expr', ln, e: misparsed }];
+        return [varDecl(vd)];
+      }
       case 'expression_statement':
         return [{ k: 'expr', ln, e: expr(kids(n)[0]) }];
       case 'if_statement': {
@@ -208,8 +280,11 @@ export function lowerCSharp(root: Node): Program {
       }
       case 'for_each_statement': {
         const left = f(n, 'left')!;
+        const target: Expr = left.type === 'tuple_pattern' || left.type === 'parenthesized_variable_designation'
+          ? { k: 'list', ln, kind: 'tuple', items: kids(left).map((k) => ({ k: 'name', ln, name: k.text }) as Expr) }
+          : { k: 'name', ln, name: left.text };
         return [{
-          k: 'foreach', ln, target: { k: 'name', ln, name: left.text }, ty: typeOf(f(n, 'type')),
+          k: 'foreach', ln, target, ty: typeOf(f(n, 'type')),
           iter: expr(f(n, 'right')!), body: bodyOf(f(n, 'body')),
         }];
       }
@@ -241,13 +316,36 @@ export function lowerCSharp(root: Node): Program {
         return [{ k: 'switch', ln, e, cases }];
       }
       case 'try_statement': {
-        const b = f(n, 'body');
-        return b ? bodyOf(b) : [];
+        const handlers: CatchClause[] = [];
+        let finallyBody: Stmt[] | undefined;
+        for (const c of kids(n)) {
+          if (c.type === 'catch_clause') {
+            const d = kids(c).find((k) => k.type === 'catch_declaration');
+            const t = d && f(d, 'type');
+            const blk = f(c, 'body') ?? kids(c).find((k) => k.type === 'block')!;
+            handlers.push({ types: t ? [t.text.split('.').pop()!] : null, name: d ? f(d, 'name')?.text : undefined, ln: lineOf(c), body: kids(blk).flatMap(stmt) });
+          } else if (c.type === 'finally_clause') {
+            finallyBody = kids(kids(c).find((k) => k.type === 'block')!).flatMap(stmt);
+          }
+        }
+        return [{ k: 'try', ln, body: kids(f(n, 'body')!).flatMap(stmt), handlers, finallyBody }];
       }
-      case 'throw_statement':
-        return [{ k: 'unsupported', ln, what: 'throw (exceptions)' }];
-      case 'local_function_statement':
-        return unsupported(n, 'local functions');
+      case 'throw_statement': {
+        const e = kids(n)[0];
+        return [{ k: 'throw', ln, e: e ? expr(e) : undefined }];
+      }
+      case 'local_function_statement': {
+        // a local function becomes a nested function value bound to its name
+        const fn = method(n, '');
+        fn.cls = undefined;
+        fn.isStatic = true;
+        const id = `${fn.name}@${ln}:${lambdaSeq++}`;
+        prog.funcs[id] = [fn];
+        return [{
+          k: 'vardecl', ln, ty: AUTO,
+          decls: [{ name: fn.name, init: { k: 'call', ln, callee: { k: 'name', ln, name: '__closure__' }, args: [{ k: 'str', ln, v: id }] } }],
+        }];
+      }
       case 'empty_statement':
         return [];
       default:
@@ -393,9 +491,9 @@ export function lowerCSharp(root: Node): Program {
       case 'qualified_name':
         return { k: 'name', ln, name: n.text.split('.').pop()! };
       case 'lambda_expression':
-        return unsupported(n, 'lambda expressions');
+        return lambda(n);
       case 'declaration_expression':
-        return unsupported(n, 'out variable declarations');
+        return { k: 'declvar', ln, name: f(n, 'name')!.text, ty: typeOf(f(n, 'type')) };
       default:
         return unsupported(n);
     }
@@ -421,8 +519,10 @@ export function lowerCSharp(root: Node): Program {
           topLevel.push(...kids(c).flatMap(stmt));
           break;
         case 'interface_declaration':
+          prog.classes[f(c, 'name')!.text] = { name: f(c, 'name')!.text, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(c) };
+          break;
         case 'enum_declaration':
-          unsupported(c, 'interfaces/enums');
+          defineEnum(c);
           break;
         default:
           break;
