@@ -18,7 +18,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
           return res;
         })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match(self.registration.scope))),
+        .catch(() => caches.match(req).then((hit) => hit || caches.match(self.registration.scope)).then((hit) => hit || Response.error())),
     );
     return;
   }
@@ -32,7 +32,8 @@ self.addEventListener('fetch', (e) => {
           if (res.ok) cache.put(req, res.clone());
           return res;
         })
-        .catch(() => hit);
+        // offline or cancelled (the page moved on): use the cached copy, or report a normal network error
+        .catch(() => hit || Response.error());
       return hit || fresh;
     }),
   );
