@@ -195,3 +195,29 @@ export function primName(t: string): string {
       return s;
   }
 }
+
+/** Python: a def / if / for / while / class whose body is not indented (IndentationError). */
+export function findPythonIndentError(root: Node): { line: number; header: string } | null {
+  const BODY: Record<string, string> = {
+    function_definition: 'body', class_definition: 'body', if_statement: 'consequence', elif_clause: 'consequence',
+    else_clause: 'body', for_statement: 'body', while_statement: 'body', try_statement: 'body', except_clause: 'body',
+    finally_clause: 'body', with_statement: 'body',
+  };
+  let found: { line: number; header: string } | null = null;
+  const visit = (n: Node) => {
+    if (found) return;
+    const field = BODY[n.type];
+    if (field) {
+      const body = n.childForFieldName(field) ?? n.namedChildren.find((c) => c?.type === 'block') ?? null;
+      const empty = !body || body.namedChildCount === 0;
+      const outdented = !!body && body.startPosition.row > n.startPosition.row && body.startPosition.column <= n.startPosition.column;
+      if (empty || outdented) {
+        found = { line: n.startPosition.row + 1, header: n.text.split('\n')[0].trim() };
+        return;
+      }
+    }
+    for (const c of n.namedChildren) if (c) visit(c);
+  };
+  visit(root);
+  return found;
+}

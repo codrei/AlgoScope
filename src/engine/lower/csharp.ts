@@ -86,7 +86,7 @@ export function lowerCSharp(root: Node, requireEntry = true): Program {
 
   function defineClass(n: Node) {
     const name = f(n, 'name')!.text;
-    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n) };
+    const cls: ClassDef = { name, fields: [], methods: Object.create(null), ctors: [], ln: lineOf(n), isStruct: n.type === 'struct_declaration' };
     const bases = kids(n).find((k) => k.type === 'base_list');
     if (bases) cls.base = kids(bases)[0]?.text;
     prog.classes[name] = cls;

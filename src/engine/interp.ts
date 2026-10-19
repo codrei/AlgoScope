@@ -61,6 +61,8 @@ export class Frame {
   cls?: string;
   ln = 0;
   globalNames?: Set<string>;
+  /** Python nonlocal names: they live in the enclosing function's scope */
+  nonlocalNames?: Set<string>;
   closure?: Map<string, Cell>[];
   constructor(name: string, fn?: Func) {
     this.name = name;
@@ -116,6 +118,9 @@ export class FieldCell implements Cell {
 }
 
 /** Convert a value to a declared static type (int truncation, char, double, bool). */
+/** C++ library types that are copied on assignment and when passed by value */
+const CPP_VALUE_CONTAINERS = new Set(['vector', 'deque', 'list', 'stack', 'queue', 'priority_queue', 'map', 'unordered_map', 'set', 'unordered_set', 'multiset', 'multimap', 'pair', 'array']);
+
 export function convert(v: Val, t?: Ty): Val {
   if (!t || t.arr || t.ptr || v === undefined || v === null) return v;
   switch (t.base) {
@@ -146,6 +151,8 @@ export class Interp {
   steps: Step[] = [];
   out = '';
   frames: Frame[] = [];
+  /** the call stack at the moment a runtime error was thrown */
+  errFrames?: Frame[];
   global: Frame;
   classes = new Map<string, ClassRT>();
   counts: Counts = { compares: 0, swaps: 0, reads: 0, writes: 0, calls: 0 };
@@ -304,12 +311,14 @@ export class Interp {
         const msg = `uncaught ${e.obj.cls}: ${e.message}`;
         trace.error = { msg, line: e.line };
         this.silent = 0;
+        if (this.errFrames) this.frames = this.errFrames;
         this.pushStep(e.line, 'error', `ERROR: ${msg}`, `The ${e.obj.cls} thrown on line ${e.line} was not caught, so the program stops: ${e.message}`);
       } else {
         const msg = e instanceof RuntimeErr ? e.message : e instanceof Error ? e.message : String(e);
         const line = e instanceof RuntimeErr ? e.line : this.ln;
         trace.error = { msg, line };
         this.silent = 0;
+        if (this.errFrames) this.frames = this.errFrames;
         this.pushStep(line, 'error', `ERROR: ${msg}`, `Something went wrong on line ${line}: ${msg}`);
       }
     }
@@ -541,6 +550,7 @@ export class Interp {
           else if (d.init) v = this.evInit(d.init, t);
           else v = this.declDefault(t);
           v = convert(v, t);
+          if (d.init && !d.dims) v = this.copyValue(v, t, d.init);
           if (t.base === 'auto' && !t.arr && !t.ptr) {
             // keep the runtime type for auto/var
           }
@@ -578,7 +588,11 @@ export class Interp {
         for (;;) {
           const c = truthy(this.ev(s.c));
           this.step(s.ln, 'check', `WHILE ${s.src} → ${c}${c ? '' : ' · exit loop'}`, s.c, s.src, c, 'loop');
-          if (!c) break;
+          if (!c) {
+            // Python while ... else: runs when the loop ends without break
+            if (s.elseBody) return this.execList(s.elseBody);
+            break;
+          }
           const r = this.execBlockOrList(s.body);
           if (r) {
             if (r.t === 'break') break;
@@ -691,8 +705,8 @@ export class Interp {
       }
       case 'global': {
         const fr = this.frame;
-        fr.globalNames ??= new Set();
-        s.names.forEach((n) => fr.globalNames!.add(n));
+        const set = s.nonlocal ? (fr.nonlocalNames ??= new Set()) : (fr.globalNames ??= new Set());
+        s.names.forEach((n) => set.add(n));
         return undefined;
       }
       case 'del': {
@@ -770,6 +784,7 @@ export class Interp {
       const obj = e instanceof Thrown ? e.obj : this.errorAsException(e);
       const h = s.handlers.find((hd) => hd.types === null || hd.types.some((t) => CATCH_ALL.has(t) || this.isSubclass(obj.cls, t) || t === obj.cls));
       if (!h) throw e;
+      this.errFrames = undefined;
       failed = true;
       this.pushScope();
       try {
@@ -871,7 +886,7 @@ export class Interp {
         } else if (s.ty?.ref && typeof it === 'string' && this.lang === 'cpp') {
           const scopes = this.frame.scopes;
           scopes[scopes.length - 1].set(s.target.name, this.stringCell(s.iter, i - 1, `${label}[${i - 1}]`));
-        } else this.declare(s.target.name, convert(n.v, s.ty), s.ty && s.ty.base !== 'auto' ? s.ty : undefined);
+        } else this.declare(s.target.name, this.copyValue(convert(n.v, s.ty), s.ty), s.ty && s.ty.base !== 'auto' ? s.ty : undefined);
         this.step(s.ln, 'assign', `FOR ${s.target.k === 'name' ? s.target.name : tname} = ${this.fmt(n.v)}`);
         const r = this.lang === 'python' ? this.execList(s.body) : this.execBlockOrList(s.body);
         if (r) {
@@ -903,6 +918,7 @@ export class Interp {
   lookup(name: string): Cell | undefined {
     const fr = this.frame;
     if (this.lang === 'python' && fr.globalNames?.has(name)) return this.global.scopes[0].get(name);
+    if (this.lang === 'python' && fr.nonlocalNames?.has(name)) return this.closureCell(name);
     for (let i = fr.scopes.length - 1; i >= 0; i--) {
       const c = fr.scopes[i].get(name);
       if (c) return c;
@@ -926,6 +942,16 @@ export class Interp {
       if (st) return st;
     }
     if (fr !== this.global) return this.global.scopes[0].get(name);
+    return undefined;
+  }
+
+  /** the variable a Python nonlocal name refers to: the nearest enclosing function's */
+  closureCell(name: string): Cell | undefined {
+    const cl = this.frame.closure ?? [];
+    for (let i = cl.length - 1; i >= 0; i--) {
+      const c = cl[i].get(name);
+      if (c) return c;
+    }
     return undefined;
   }
 
@@ -958,15 +984,19 @@ export class Interp {
     return undefined;
   }
 
-  private setName(name: string, v: Val, ln: number): Cell {
+  private setName(name: string, v: Val, ln: number, src?: Expr): Cell {
     void ln;
     if (this.lang === 'python') {
       const fr = this.frame;
+      if (fr.nonlocalNames?.has(name)) {
+        const outer = this.closureCell(name);
+        if (!outer) throw this.err(`no binding for nonlocal '${name}' found`);
+        outer.set(v);
+        return outer;
+      }
+      // assignment inside a nested function creates a local (unless declared global / nonlocal)
       const target = fr.globalNames?.has(name) ? this.global.scopes[0] : fr.scopes[0];
       let c = target.get(name);
-      if (!c && fr.closure) {
-        // assignment inside a nested function creates a local
-      }
       if (c) c.set(v);
       else {
         c = new VarCell(name, v);
@@ -976,7 +1006,7 @@ export class Interp {
     }
     const c = this.lookup(name);
     if (!c) throw this.err(`'${name}' was not declared`);
-    c.set(convert(v, c.ty));
+    c.set(src ? this.copyValue(convert(v, c.ty), c.ty, src) : convert(v, c.ty));
     return c;
   }
 
@@ -1226,6 +1256,25 @@ export class Interp {
       return new Ptr(new ElemCell(this, arr, idx, `${this.arrName(arr)}[${idx}]`), arr, idx);
     }
     if (a instanceof Ptr && b instanceof Ptr && op === '-') return (a.idx ?? 0) - (b.idx ?? 0);
+    // C: an array name is a pointer to its first element, so p < arr + n, p == arr and p - arr work
+    if (this.lang === 'c' || this.lang === 'cpp') {
+      const pos = (v: Val) => (v instanceof Ptr && v.arr ? { arr: v.arr, idx: v.idx ?? 0 } : v instanceof Arr && v.kind === 'array' ? { arr: v, idx: 0 } : null);
+      const pa = pos(a);
+      const pb = pos(b);
+      if (pa && pb && pa.arr === pb.arr && (a instanceof Ptr || b instanceof Ptr)) {
+        switch (op) {
+          case '-': return pa.idx - pb.idx;
+          case '<': return pa.idx < pb.idx;
+          case '<=': return pa.idx <= pb.idx;
+          case '>': return pa.idx > pb.idx;
+          case '>=': return pa.idx >= pb.idx;
+          case '==': return pa.idx === pb.idx;
+          case '!=': return pa.idx !== pb.idx;
+        }
+      }
+      // char *s = "text": s + 1 points one character further
+      if (typeof a === 'string' && typeof b === 'number' && (op === '+' || op === '-') && this.lang === 'c') return a.slice(op === '+' ? b : -b);
+    }
     if (a instanceof Iter && isNumeric(b) && (op === '+' || op === '-')) return new Iter(a.arr, a.idx + (op === '+' ? num(b) : -num(b)));
     if (a instanceof Iter && b instanceof Iter && op === '-') return a.idx - b.idx;
     // strings
@@ -1329,6 +1378,10 @@ export class Interp {
     if (v instanceof Arr) return new ElemCell(this, v, 0, `${this.arrName(v)}[0]`);
     if (v instanceof Obj) return { get: () => v, set: () => { throw this.err('cannot assign to *object'); }, label: () => `*${v.cls}` };
     if (v === null || v === undefined) throw this.err('null pointer dereference (the pointer is NULL)');
+    // char *s = "text": *s is the first character ('\0' at the end)
+    if (typeof v === 'string' && (this.lang === 'c' || this.lang === 'cpp')) {
+      return { get: () => new Chr(v.length ? v.charCodeAt(0) : 0), set: () => { throw this.err('a string literal cannot be changed (copy it into a char array first)'); }, label: () => `*"${v.length > 8 ? v.slice(0, 8) + '…' : v}"` };
+    }
     throw this.err(`can't dereference a ${typeName(v)}`);
   }
 
@@ -1347,7 +1400,7 @@ export class Interp {
   private evAssign(e: Extract<Expr, { k: 'assign' }>): Val {
     if (e.op === '=') {
       const v = this.ev(e.value);
-      return this.assignTo(e.target, v);
+      return this.assignTo(e.target, v, e.value);
     }
     const op = e.op.slice(0, -1);
     const cell = this.lv(e.target);
@@ -1370,7 +1423,7 @@ export class Interp {
     return after;
   }
 
-  assignTo(target: Expr, v: Val): Val {
+  assignTo(target: Expr, v: Val, src?: Expr): Val {
     if (target.k === 'list') {
       const items = this.iterToArray(v);
       if (items.length !== target.items.length) throw this.err(`expected ${target.items.length} values to unpack, got ${items.length}`);
@@ -1383,7 +1436,7 @@ export class Interp {
       return v;
     }
     if (target.k === 'name') {
-      const c = this.setName(target.name, v, target.ln);
+      const c = this.setName(target.name, v, target.ln, src);
       const nv = c.get();
       this.note = `${target.name} = ${this.fmt(nv)}`;
       return nv;
@@ -1399,23 +1452,73 @@ export class Interp {
     }
     if (target.k === 'index') {
       const r = this.evIndexFull(target);
+      if (src && r.cont instanceof Arr) v = this.copyValue(v, r.cont.elemTy, src);
       this.writeIndexed(r.cont, r.key, v, r.label);
       const nv = r.cont instanceof Arr ? r.cont.items[this.normIndex(r.cont, num(r.key))] : v;
       this.note = `${r.label} = ${this.fmt(nv)}`;
       return nv;
     }
     const cell = this.lv(target);
-    cell.set(convert(v, cell.ty));
+    cell.set(src ? this.copyValue(convert(v, cell.ty), cell.ty, src) : convert(v, cell.ty));
     const nv = cell.get();
     this.note = `${cell.label()} = ${this.fmt(nv)}`;
     return nv;
+  }
+
+  /**
+   * C/C++ structs and objects, C++ containers (vector, map...) and C# structs are values:
+   * assigning or passing one by value makes a copy. src is the expression the value came
+   * from; a temporary (a call, a literal, new ...) needs no copy. No src (parameters) = copy.
+   */
+  copyValue(v: Val, t: Ty | undefined, src?: Expr): Val {
+    if (!(v instanceof Obj || v instanceof Arr || v instanceof MapV)) return v;
+    if (src && !(src.k === 'name' || src.k === 'member' || src.k === 'index' || (src.k === 'un' && src.op === '*'))) return v;
+    if (this.lang === 'csharp') return v instanceof Obj && this.classes.get(v.cls)?.def.isStruct ? this.cloneValue(v) : v;
+    if (this.lang !== 'c' && this.lang !== 'cpp') return v;
+    if (!t || t.ptr || t.ref || t.arr || t.base === 'auto') return v;
+    if (v instanceof Obj) return this.classes.has(t.base) ? this.cloneValue(v) : v;
+    if (this.lang === 'cpp' && (v instanceof MapV || v.kind !== 'array') && CPP_VALUE_CONTAINERS.has(t.base)) return this.cloneValue(v);
+    return v;
+  }
+
+  cloneValue(v: Val): Val {
+    if (v instanceof Obj) {
+      const c = new Obj(v.cls);
+      v.fieldTys.forEach((ty, k) => c.fieldTys.set(k, ty));
+      v.fields.forEach((x, k) => {
+        const ty = v.fieldTys.get(k);
+        const deep = !!ty && !ty.ptr && !ty.ref && (
+          (x instanceof Obj && this.classes.has(ty.base) && (this.lang !== 'csharp' || !!this.classes.get(x.cls)?.def.isStruct))
+          || (this.lang !== 'csharp' && (x instanceof MapV || (x instanceof Arr && (x.kind === 'array' || CPP_VALUE_CONTAINERS.has(ty.base))))));
+        c.fields.set(k, deep ? this.cloneValue(x) : x);
+      });
+      return c;
+    }
+    if (v instanceof Arr) {
+      const et = v.elemTy;
+      const a = new Arr(v.items.map((x) => (x instanceof Arr || x instanceof MapV || (x instanceof Obj && et && !et.ptr && this.classes.has(et.base)) ? this.cloneValue(x) : x)), v.kind, et);
+      a.minHeap = v.minHeap;
+      a.cmpFn = v.cmpFn;
+      a.priorityPairs = v.priorityPairs;
+      return a;
+    }
+    if (v instanceof MapV) {
+      const m = new MapV(v.isSet, v.sorted);
+      m.factory = v.factory;
+      v.entries.forEach(([k, x], key) => m.entries.set(key, [k, this.cloneValue(x)]));
+      return m;
+    }
+    return v;
   }
 
   private evIncDec(e: Extract<Expr, { k: 'incdec' }>): Val {
     const cell = this.lv(e.target);
     const old = cell.get();
     let nv: Val;
-    if (old instanceof Ptr && old.arr) nv = this.binop(e.op === '++' ? '+' : '-', old, 1);
+    const cfam = this.lang === 'c' || this.lang === 'cpp';
+    if ((old instanceof Ptr && old.arr) || (cfam && old instanceof Arr && old.kind === 'array' && !!cell.ty?.ptr)) nv = this.binop(e.op === '++' ? '+' : '-', old, 1);
+    // char *s = "text"; s++ moves to the next character
+    else if (cfam && typeof old === 'string' && !!cell.ty?.ptr && e.op === '++') nv = old.slice(1);
     else if (old instanceof Iter) nv = new Iter(old.arr, old.idx + (e.op === '++' ? 1 : -1));
     else if (old instanceof Chr) nv = new Chr(old.c + (e.op === '++' ? 1 : -1));
     else if (old instanceof Flt) nv = new Flt(old.v + (e.op === '++' ? 1 : -1));
@@ -1790,7 +1893,9 @@ export class Interp {
         const m = this.findMethod(c.obj.name, c.name, e.args.length);
         if (m) return this.callUser(m, e.args, undefined);
       }
-      if (c.obj.k === 'name' && c.obj.name === 'super' && this.frame.self) {
+      // Java/C# super.m(...) and Python super().m(...)
+      const isSuper = (c.obj.k === 'name' && c.obj.name === 'super') || (c.obj.k === 'call' && c.obj.callee.k === 'name' && c.obj.callee.name === 'super');
+      if (isSuper && this.frame.self) {
         const base = this.classes.get(this.frame.cls ?? '')?.def.base;
         if (base && !this.classes.has(base) && isExceptionName(base) && c.name === '__init__') {
           const msg = e.args.length ? this.ev(e.args[0]) : '';
@@ -1820,7 +1925,16 @@ export class Interp {
       }
       const r = callMethod(this, o, c.name, e.args, c.obj);
       if (r !== NF) return r as Val;
-      throw this.err(`a ${typeName(o)} has no method '${c.name}'`);
+      // obj.GetType().Name (C#) / obj.getClass().getSimpleName() (Java)
+      if (o instanceof Obj && (c.name === 'GetType' || c.name === 'getClass') && !e.args.length) {
+        const t = new Obj('Type');
+        t.fields.set('Name', o.cls);
+        t.fields.set('FullName', o.cls);
+        return t;
+      }
+      if (o instanceof Obj && o.cls === 'Type' && ['getSimpleName', 'getName', 'ToString', 'toString'].includes(c.name)) return o.fields.get('Name') ?? null;
+      const tn = typeName(o);
+      throw this.err(`${/^[aeiou]/i.test(tn) ? 'an' : 'a'} ${tn} has no method '${c.name}'`);
     }
     return this.callValue(this.ev(c), e.args, 'function');
   }
@@ -1926,6 +2040,7 @@ export class Interp {
     fr.closure = closure;
     fr.ln = fn.ln;
     if (fn.globals?.length) fr.globalNames = new Set(fn.globals);
+    if (fn.nonlocals?.length) fr.nonlocalNames = new Set(fn.nonlocals);
     const argTexts: string[] = [];
     if (this.lang === 'python' && fn.cls && !fn.isStatic && self) fr.scopes[0].set('self', new VarCell('self', self));
     fn.params.forEach((p, i) => {
@@ -1934,7 +2049,7 @@ export class Interp {
         fr.scopes[0].set(p.name, a.cell);
         argTexts.push(this.fmt(a.cell instanceof ElemCell ? a.cell.arr.items[a.cell.idx] : a.cell.get()));
       } else {
-        const v = convert(a as Val, p.ty);
+        const v = this.copyValue(convert(a as Val, p.ty), p.ty);
         fr.scopes[0].set(p.name, new VarCell(p.name, v, p.ty.base === 'auto' ? undefined : p.ty));
         argTexts.push(v instanceof Arr ? this.findArrName(v) ?? this.fmt(v) : this.fmt(v));
       }
@@ -1956,6 +2071,10 @@ export class Interp {
         fr.ln = fn.endLn;
         this.step(fn.endLn, 'end', `Program finished${code}`);
       }
+    } catch (e) {
+      // remember where the error happened, so the error step can still show that function's variables
+      if (!this.errFrames && (e instanceof RuntimeErr || e instanceof Thrown)) this.errFrames = [...this.frames];
+      throw e;
     } finally {
       this.frames.pop();
     }

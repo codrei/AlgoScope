@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import type { HeapArr, SnapVal, Step, TouchRole } from '../engine/trace';
 import { compareOp, markersFor } from '../lib/analysis';
 
@@ -24,11 +24,30 @@ export function cellText(v: SnapVal | undefined): string {
   }
 }
 
-function sizing(n: number, maxLen: number, big: boolean) {
+/** width of an element, kept up to date when the panel is resized */
+function useWidth(ref: RefObject<HTMLElement | null>): number {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setW(el.clientWidth);
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
+
+function sizing(n: number, maxLen: number, big: boolean, width = 0) {
   let cell = big && n <= 8 ? 72 : big && n <= 10 ? 62 : 56;
   if (n > 24) cell = 30;
   else if (n > 16) cell = 38;
   else if (n > 10) cell = 46;
+  // never wider than the panel: on a 1280 or 1024 px projector shrink the cells so every one stays visible
+  if (width > 0 && n > 0) {
+    const fits = (c: number) => n * c + (n - 1) * (c >= 46 ? 12 : 6) + 16 <= width;
+    while (cell > 26 && !fits(cell)) cell -= 2;
+  }
   let font = cell >= 72 ? 27 : cell >= 62 ? 23 : cell >= 56 ? 20 : cell >= 46 ? 17 : cell >= 38 ? 14 : 12;
   // keep long values (False, 1000, 'hello') inside the box: about 0.62em per character
   if (maxLen > 3) font = Math.max(10, Math.min(font - (maxLen - 3) * 2.2, (cell - 10) / (maxLen * 0.62)));
@@ -53,11 +72,25 @@ interface Props {
 export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big, fieldMarkers, info, activeRange }: Props) {
   const roles = rolesFor(step, item.id);
   const n = item.items.length;
-  const maxLen = Math.max(1, ...item.items.map((v) => cellText(v).length));
-  const { cell, font, gap } = sizing(n, maxLen, !!big);
-  const pitch = cell + gap;
   const markers = markersFor(step, item.id, n);
   fieldMarkers?.forEach((ms, i) => markers.set(i, [...(markers.get(i) ?? []), ...ms]));
+  // C char buffers (char stack[100], char postfix[20]): leave out the unused '\0' cells at the end
+  let shown = n;
+  if (n > 12 && item.items.every((v) => v.t === 'p' && /^'.*'$/.test(v.s))) {
+    let used = -1;
+    item.items.forEach((v, i) => {
+      if (v.t === 'p' && v.s !== "'\\0'") used = i;
+    });
+    for (const i of markers.keys()) used = Math.max(used, i);
+    for (const i of roles.keys()) used = Math.max(used, i);
+    shown = Math.min(n, used + 2);
+  }
+  const visible = shown < n ? item.items.slice(0, shown) : item.items;
+  const maxLen = Math.max(1, ...visible.map((v) => cellText(v).length));
+  const box = useRef<HTMLDivElement>(null);
+  const width = useWidth(box);
+  const { cell, font, gap } = sizing(shown + (shown < n ? 1 : 0), maxLen, !!big, width);
+  const pitch = cell + gap;
   const kind = item.arrKind;
 
   // pair of cells highlighted together -> bracket with the operator
@@ -80,7 +113,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
 
   if (kind === 'stack') {
     return (
-      <div className="struct">
+      <div className="struct" ref={box}>
         <Label names={names} kind="stack" n={n} sorted={false} />
         <div className="stack-view" style={style}>
           {n === 0 && <div className="cell null" style={{ width: 104, height: 40 }}>empty</div>}
@@ -98,7 +131,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
 
   const isQueue = kind === 'queue' || kind === 'deque';
   return (
-    <div className="struct">
+    <div className="struct" ref={box}>
       <Label names={names} kind={kindLabel(kind)} n={n} sorted={allLocked} info={info} />
       <div className="cells" style={style}>
         {n === 0 && <div className="cell null">empty</div>}
@@ -110,7 +143,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
             <span>{op}</span>
           </div>
         )}
-        {item.items.map((v, i) => {
+        {visible.map((v, i) => {
           const role = roles.get(i);
           const isLocked = locked.has(i) && role !== 'compare' && role !== 'swap';
           let anim = '';
@@ -137,6 +170,12 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
             </div>
           );
         })}
+        {shown < n && (
+          <div className="cell-col" title={`${n - shown} more empty cells ('\\0')`}>
+            <div className="cell null">+{n - shown}</div>
+            <div className="cell-idx">…{n - 1}</div>
+          </div>
+        )}
       </div>
     </div>
   );

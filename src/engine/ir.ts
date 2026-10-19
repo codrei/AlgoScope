@@ -69,7 +69,7 @@ export type Stmt =
   | { k: 'vardecl'; ln: number; ty: Ty; decls: VarDeclItem[] }
   | { k: 'expr'; ln: number; e: Expr }
   | { k: 'if'; ln: number; c: Expr; src: string; then: Stmt[]; else?: Stmt[] }
-  | { k: 'while'; ln: number; c: Expr; src: string; body: Stmt[] }
+  | { k: 'while'; ln: number; c: Expr; src: string; body: Stmt[]; elseBody?: Stmt[] }
   | { k: 'dowhile'; ln: number; c: Expr; src: string; condLn: number; body: Stmt[] }
   | { k: 'for'; ln: number; init: Stmt[]; c?: Expr; src: string; update: Expr[]; body: Stmt[] }
   | { k: 'foreach'; ln: number; target: Expr; ty?: Ty; iter: Expr; body: Stmt[]; elseBody?: Stmt[] }
@@ -79,7 +79,7 @@ export type Stmt =
   | { k: 'pass'; ln: number }
   | { k: 'block'; ln: number; body: Stmt[] }
   | { k: 'switch'; ln: number; e: Expr; cases: { tests: Expr[] | null; body: Stmt[] }[] }
-  | { k: 'global'; ln: number; names: string[] }
+  | { k: 'global'; ln: number; names: string[]; nonlocal?: boolean }
   | { k: 'del'; ln: number; targets: Expr[] }
   | { k: 'try'; ln: number; body: Stmt[]; handlers: CatchClause[]; elseBody?: Stmt[]; finallyBody?: Stmt[] }
   | { k: 'throw'; ln: number; e?: Expr }
@@ -113,6 +113,8 @@ export interface Func {
   indexVars: Record<string, string[]>;
   /** Python: names declared `global` */
   globals?: string[];
+  /** Python: names declared nonlocal (they live in the enclosing function) */
+  nonlocals?: string[];
   /** Python @lru_cache / @cache: results are remembered per argument list */
   memo?: boolean;
 }
@@ -130,6 +132,8 @@ export interface ClassDef {
   methods: Record<string, Func[]>;
   ctors: Func[];
   base?: string;
+  /** C# struct: a value type, copied on assignment */
+  isStruct?: boolean;
   ln: number;
 }
 

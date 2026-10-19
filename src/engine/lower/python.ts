@@ -27,8 +27,9 @@ export function lowerPython(root: Node): Program {
   function funcDef(n: Node, cls?: string, decorators = ''): Func {
     const body = block(f(n, 'body')!);
     const globals: string[] = [];
+    const nonlocals: string[] = [];
     const scan = (ss: Stmt[]) => ss.forEach((s) => {
-      if (s.k === 'global') globals.push(...s.names);
+      if (s.k === 'global') (s.nonlocal ? nonlocals : globals).push(...s.names);
       if (s.k === 'block') scan(s.body);
     });
     scan(body);
@@ -45,6 +46,7 @@ export function lowerPython(root: Node): Program {
       cls,
       indexVars: collectIndexVars(body),
       globals,
+      nonlocals,
       memo: /@(?:functools\.)?(?:lru_cache|cache)\b/.test(deco) || undefined,
     };
     return fn;
@@ -111,7 +113,8 @@ export function lowerPython(root: Node): Program {
       }
       case 'while_statement': {
         const c = f(n, 'condition')!;
-        return [{ k: 'while', ln, c: expr(c), src: c.text, body: block(f(n, 'body')!) }];
+        const alt = f(n, 'alternative');
+        return [{ k: 'while', ln, c: expr(c), src: c.text, body: block(f(n, 'body')!), elseBody: alt ? block(f(alt, 'body')!) : undefined }];
       }
       case 'for_statement': {
         const alt = f(n, 'alternative');
@@ -140,8 +143,9 @@ export function lowerPython(root: Node): Program {
       case 'continue_statement':
         return [{ k: 'continue', ln }];
       case 'global_statement':
-      case 'nonlocal_statement':
         return [{ k: 'global', ln, names: kids(n).map((k) => k.text) }];
+      case 'nonlocal_statement':
+        return [{ k: 'global', ln, names: kids(n).map((k) => k.text), nonlocal: true }];
       case 'delete_statement': {
         const t = kids(n)[0];
         return [{ k: 'del', ln, targets: t.type === 'expression_list' ? kids(t).map(expr) : [expr(t)] }];

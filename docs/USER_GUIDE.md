@@ -80,10 +80,13 @@ Depending on the code, AlgoScope also draws:
 
 - The counters (**comparisons, swaps, function calls**) update with every step.
 - **Complexity Lab** (top bar) reruns the current sorting or searching example on 8, 16, 32 and 64 elements
-  (random, sorted and reversed input) and plots the counts against the shape of its Big-O. It also compares
-  all sorting algorithms on the same input.
+  and plots the counts against the shape of its Big-O. Sorts run on random, already sorted and reversed input,
+  and the lab marks which input did the most and the least work *for that algorithm* (measured, not assumed:
+  already sorted input is the best case of Insertion Sort but the worst case of this Quick Sort, whose pivot is
+  the last element). Searches run with the target first, random, and missing. It also compares all sorting
+  algorithms on the same input.
 - Good classroom pairs: recursive Fibonacci vs. Fibonacci (DP table); Bubble vs. Merge Sort in the
-  Complexity Lab; Linear vs. Binary Search.
+  Complexity Lab; Linear vs. Binary Search; Insertion Sort vs. Quick Sort on sorted input.
 
 ## 5. Using your own code
 
@@ -121,20 +124,35 @@ methods, inheritance, interfaces, abstract classes, generics and C++ templates),
 `TreeMap`, `HashSet`, `PriorityQueue`, `List`, `Dictionary`, `Queue`, `Stack`, Python lists, dicts, sets, tuples,
 `deque`, `defaultdict`, `Counter`, `heapq` and `@lru_cache`.
 
+C structs, C++ objects and containers (`vector`, `map`...) and C# `struct`s are copied when assigned or passed by
+value, exactly as in the real languages; pointers can walk through arrays and strings (`p++`, `p < arr + n`,
+`*(p + i)`, `while (*s) s++`). Python supports `super()`, `nonlocal`, and `for`/`while` ... `else`.
+
+Programs that only use plain variables (a GCD, a counting loop) show their variables as big tiles; the one that
+just changed is highlighted.
+
 **Not supported:** threads, files, Java streams, C# LINQ, operator overloading, and most of the standard library
 beyond the collections above. When something is not supported, AlgoScope says which line.
 
-**Checked against the real compilers:** 45 typical lecture programs (linked lists with double pointers, BST insert/delete,
-heap sort, hash tables, infix-to-postfix, N-Queens, Floyd–Warshall, Kruskal, Dijkstra with priority queues, topological
-sort, memoized DP, generic stacks and queues, interfaces, exceptions and more) print exactly what gcc, g++, javac, .NET and
-CPython print. They run as automated tests before every update.
+**Checked against the real compilers:** 62 programs (45 typical lecture programs such as linked lists with double
+pointers, BST insert/delete, heap sort, hash tables, infix-to-postfix, N-Queens, Floyd–Warshall, Kruskal, Dijkstra with
+priority queues, topological sort, memoized DP, generic stacks and queues, interfaces and exceptions; the 12 programs from
+the course slides; and 5 programs about struct copies, pointer walking and Python closures) print exactly what gcc, g++,
+javac, .NET and CPython print. So do all 49 examples in every language. They run as automated tests before every update.
+
+**Mistakes are explained, not crashed on:** an index out of bounds, a null pointer, dividing by zero, missing input,
+runaway recursion or a missing indent each stop with a plain message on the right line. An endless loop stops after
+5,000 steps with a hint to check the loop condition.
 
 **Limits:** a run stops after 5,000 steps so the animation stays readable. Use small inputs (about 5–10
 elements) for animations, and the Complexity Lab for bigger sizes.
 
 ## 6. In the classroom
 
-- **Present** hides the editor and shows the picture large with the code underneath, like the lecture videos.
+- **Present** hides the editor and shows the picture large with the code beside it, like the lecture videos.
+- **Projectors:** AlgoScope is checked at 1920×1080, 1366×768, 1280×720 and 1024×768. On short screens the picture
+  shrinks just enough to stay above the explanation, arrays shrink to fit the width, and in Present mode the explanation
+  moves above the code so the picture keeps the whole left side.
 - **+ / −** enlarge or shrink the code and the picture for the projector.
 - The **moon / sun** button switches to a dark theme, which often looks better on projectors.
 - **Shareable links**: add options to the address to open a specific state, for example

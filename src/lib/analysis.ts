@@ -374,5 +374,12 @@ export function keySteps(trace: Trace): number[] {
   const trimmed = out.filter((i, k) => !(isWriteOnly(i) && out[k + 1] === i + 1 && trace.steps[i + 1].kind === 'swap'));
   // a run of prints (an output loop) collapses to its last step
   if (trace.steps.some((st) => st.screen)) return trimmed;
-  return trimmed.filter((i, k) => !(trace.steps[i].kind === 'print' && trimmed[k + 1] !== undefined && trace.steps[trimmed[k + 1]].kind === 'print'));
+  const result = trimmed.filter((i, k) => !(trace.steps[i].kind === 'print' && trimmed[k + 1] !== undefined && trace.steps[trimmed[k + 1]].kind === 'print'));
+  // programs that only work with plain variables (brute force over bit patterns, number puzzles) would
+  // jump straight to the end: add their decisions (if / switch) so there is something to step through
+  if (result.length < 25 && result.length * 8 < trace.steps.length) {
+    const extra = trace.steps.flatMap((st, i) => (st.kind === 'check' && /^(IF|SWITCH) /.test(st.text) ? [i] : []));
+    return [...new Set([...result, ...extra])].sort((a, b) => a - b);
+  }
+  return result;
 }

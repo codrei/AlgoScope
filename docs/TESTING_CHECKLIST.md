@@ -3,6 +3,17 @@
 For the team, before the demo. Use https://codrei.github.io/AlgoScope/ (hard refresh with Ctrl + Shift + R
 after an update).
 
+## Before class (5 minutes, on the classroom computer)
+
+- [ ] Open the site and run one example in **each** language (C, C++, Java, C#, Python). This downloads each
+      language's parser once; after that AlgoScope works even if the Wi-Fi drops.
+- [ ] Connect the projector and press **Present**. At 1280×720 the explanation sits above the code on the right.
+- [ ] Try **+** once or twice if the back row needs bigger text, and the moon button if the projector washes out colors.
+- [ ] Keep these links ready (they open straight into a run):
+  - `https://codrei.github.io/AlgoScope/?example=bubble-sort&lang=cpp&run=1&present=1`
+  - `https://codrei.github.io/AlgoScope/?example=heap-sort&lang=java&run=1&present=1`
+  - `https://codrei.github.io/AlgoScope/?example=quick-sort&lang=cpp&lab=1`
+
 ## Quick check (10 minutes)
 
 - [ ] The page opens and shows **Bubble Sort**.
@@ -64,7 +75,13 @@ That's how we find unsupported features before the professor does.
 - **How does it know when something is a swap?** When two elements of the same array exchange values within a
   few steps, the engine marks it as a swap. That works whether the code uses a temp variable, `swap()`, or Python's `a, b = b, a`.
 - **Does it work without internet?** Yes, after the first visit the browser keeps a copy of the app.
-- **How do you know it's correct?** 45 typical lecture programs and 12 programs from the course
-  lessons print exactly what the real compilers (gcc, g++, javac, .NET, CPython) print. Together with the engine
-  tests (358 in all) and 17 click-through interface tests, they run on every example in every language before each
-  update is published.
+- **How do you know it's correct?** 62 programs (45 typical lecture programs, the 12 programs from the course
+  slides and 5 edge-case programs) and all 49 examples print exactly what the real compilers (gcc, g++, javac, .NET,
+  CPython) print. Together with the engine tests (373 in all) and 20 click-through interface tests (including
+  projector sizes), they run before each update is published. A browser sweep also runs every example in every
+  language (229 runs) and checks for errors.
+- **What if a student's code has a bug?** Out-of-bounds indexes, null pointers, division by zero, missing input,
+  runaway recursion and missing indents stop with a plain message on the right line, and the picture shows the data
+  at that moment. An endless loop stops after 5,000 steps with a hint about the loop condition.
+- **Why is sorted input the worst case for Quick Sort here?** This Quick Sort picks the last element as the pivot,
+  so on sorted input every partition is as unbalanced as possible: O(n²). The Complexity Lab measures it and says so.

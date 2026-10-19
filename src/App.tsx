@@ -347,12 +347,13 @@ export default function App() {
         )}
         <section className="panel viz" aria-label="Visualization">
           <div className="viz-scroll" style={{ zoom }}>
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
             {trace?.truncated && atEnd && (
-              <div className="notice">
-                Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. Try a smaller input (fewer elements or a smaller n).
+              <div className="notice" role="status">
+                Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. If a loop never ends, check
+                that its condition can become false (is the counter changing?). Otherwise try a smaller input.
               </div>
             )}
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
           </div>
           <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />
         </section>

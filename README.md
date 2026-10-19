@@ -15,7 +15,8 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 - Narration of every step: `COMPARE arr[0] (5) > arr[1] (1) → true`, `SWAP arr[0] ↔ arr[1]`, `CALL fib(3)`...
 - Array cells light up when compared, swapped or changed; elements turn green once they are locked in place
 - Counters for comparisons, swaps and function calls, to compare algorithms' complexity in practice
-- Complexity Lab: reruns an algorithm on growing inputs and plots the counts against its Big-O
+- Complexity Lab: reruns an algorithm on growing inputs, plots the counts against its Big-O, and marks which
+  input is that algorithm's measured best and worst case
 - Recursion tree, graph drawing for adjacency matrices, linked lists and trees as nodes and arrows
 - Built-in library of 49 examples covering a full DSA and Algorithms & Complexity course: algorithm analysis,
   sorting, searching, recursion, data structures, trees and heaps, dynamic programming, graphs, greedy and
@@ -23,7 +24,8 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 - Runs code as it appears on lecture slides (K&R C, Turbo C++ with `conio.h`, curly quotes, Python 2 print) and
   adds a `main()` for slides that show only a function
 - Console screen for Turbo C programs (`gotoxy`, `getch` with arrow keys)
-- Present mode for projectors, dark/light theme, adjustable text size
+- Present mode for projectors (checked at 1080p, 768p, 720p and 1024×768), dark/light theme, adjustable text size
+- Clear messages for student mistakes (index out of bounds, null pointer, endless loop, missing indent...)
 - Runs fully in the browser, so no server and no installation are needed
 
 ## Running locally

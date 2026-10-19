@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Layers, Terminal } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
 import { lockedCells, recursionRoot, structuresFor, type CallNode, type LockInfo, type StructRef } from '../lib/analysis';
 import { ArrayView, cellText, rolesFor } from './ArrayView';
@@ -39,6 +39,8 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
   const beginner = mode === 'beginner';
+  const short = useShortScreen();
+  const card = step && <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />;
   return (
     <>
       <div className={`viz-header ${beginner ? 'compact' : ''}`}>
@@ -72,18 +74,20 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
         <div className="present-grid">
           <div className="present-main">
             <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-            <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />
+            {!short && card}
             <VarChips step={step} prev={prev} />
             <OutputBox trace={trace!} step={step} compact />
           </div>
-          <div className="present-side">
+          {/* on a short projector screen the explanation sits above the code, so the picture keeps the whole left side */}
+          <div className={`present-side ${short ? 'with-card' : ''}`}>
+            {short && card}
             <CodePanel code={code} line={step.ln} />
           </div>
         </div>
       ) : (
         <>
           <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
-          <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />
+          {card}
           {beginner ? (
             <>
               <VarChips step={step} prev={prev} />
@@ -220,6 +224,14 @@ function Stage(p: {
   if (rec !== null && (!beginner || views.length === 0)) views.push(<RecursionTree key="rec" nodes={calls} root={rec} step={step} stepIndex={stepIndex} />);
 
   if (!views.length) {
+    // programs with only plain variables (gcd, counting loops, your own first programs): show them big
+    if (hasBoardVars(step)) {
+      return (
+        <FitToView>
+          <div className="stage"><VarBoard step={step} prev={prev} /></div>
+        </FitToView>
+      );
+    }
     return (
       <div className="stage">
         <div className="empty-stage">Nothing to draw yet. The variables are listed under the explanation.</div>
@@ -227,9 +239,78 @@ function Stage(p: {
     );
   }
   return (
-    <div className={`stage ${beginner ? 'stage-big' : ''}`}>
-      {views}
-      <Legend step={step} arrays={arrays} locks={locks} stepIndex={stepIndex} isLast={isLast} />
+    <FitToView>
+      <div className={`stage ${beginner ? 'stage-big' : ''}`}>
+        {views}
+        <Legend step={step} arrays={arrays} locks={locks} stepIndex={stepIndex} isLast={isLast} />
+      </div>
+    </FitToView>
+  );
+}
+
+/** true on short screens (720p / 768p projectors and laptops) */
+function useShortScreen(): boolean {
+  const [short, setShort] = useState(() => window.innerHeight < 820);
+  useEffect(() => {
+    const on = () => setShort(window.innerHeight < 820);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return short;
+}
+
+/**
+ * On short screens (a 1280×720 or 1024×768 projector) the picture would slide under the sticky
+ * explanation card. Shrink it just enough to fit above the card (never below 70 %). The scale only
+ * moves in steps of 5 % and grows back only when there is clearly room, so it does not wobble
+ * from one step to the next.
+ */
+function FitToView({ children }: { children: ReactNode }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [natural, setNatural] = useState(0);
+  const scaleRef = useRef(1);
+  useLayoutEffect(() => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i) return;
+    const scroller = o.closest('.viz-scroll') as HTMLElement | null;
+    const fit = () => {
+      const h = i.offsetHeight; // layout height, not affected by the transform
+      setNatural(h);
+      let target = 1;
+      if (scroller && window.innerWidth >= 980 && h > 0) {
+        // measure on screen (getBoundingClientRect), so the text-size zoom and our own scale are included
+        // the explanation card that follows the picture in the same column (none when it sits beside the code)
+        const card = o.parentElement?.querySelector(':scope > .step-card') as HTMLElement | null;
+        const box = scroller.getBoundingClientRect();
+        const z = scroller.offsetHeight ? box.height / scroller.offsetHeight : 1;
+        // distance from the top of the panel's content (scroll-independent: the first child scrolls with us)
+        const first = (scroller.firstElementChild as HTMLElement | null)?.getBoundingClientRect().top ?? box.top;
+        const top = o.getBoundingClientRect().top - first + 18 * z;
+        const room = box.height - top - (card?.getBoundingClientRect().height ?? 0) - 30 * z;
+        const shown = i.getBoundingClientRect().height / scaleRef.current;
+        target = Math.max(0.7, Math.min(1, Math.floor((room / shown) * 20) / 20));
+      }
+      const cur = scaleRef.current;
+      if (target < cur || target >= cur + 0.1 || target === 1) {
+        scaleRef.current = target;
+        setScale(target);
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(i);
+    if (scroller) ro.observe(scroller);
+    return () => ro.disconnect();
+  }, []);
+  const shrunk = scale < 1 && natural > 0;
+  return (
+    <div ref={outer} className="fit-view" style={shrunk ? { height: Math.ceil(natural * scale) } : undefined}>
+      <div ref={inner} style={shrunk ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : undefined}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -331,6 +412,43 @@ function scalarText(step: Step, v: SnapVal): string | null {
     }
   }
   return null;
+}
+
+function boardVars(step: Step) {
+  const f = step.frames[step.frames.length - 1];
+  if (!f) return { f, vars: [] as [string, SnapVal][] };
+  return { f, vars: f.vars.filter(([n, v]) => n !== 'this' && n !== 'self' && (v.t === 'p' || v.t === 'null')) };
+}
+
+function hasBoardVars(step: Step): boolean {
+  return boardVars(step).vars.length > 0;
+}
+
+/** Big value tiles for the current function's variables; the one that just changed is highlighted. */
+function VarBoard({ step, prev }: { step: Step; prev?: Step }) {
+  const { f, vars } = boardVars(step);
+  if (!f || !vars.length) return null;
+  const pf = prev?.frames.find((x) => x.fid === f.fid);
+  const before = new Map(pf?.vars.map(([n, v]) => [n, JSON.stringify(v)]));
+  return (
+    <div className="struct">
+      <div className="struct-label">
+        <b>variables</b>
+        <span className="kind">{f.name}{f.fid !== 0 ? '()' : ''}</span>
+      </div>
+      <div className="var-board">
+        {vars.map(([n, v]) => {
+          const changed = !!pf && before.get(n) !== JSON.stringify(v);
+          return (
+            <div key={n} className={`var-tile ${changed ? 'changed' : ''}`}>
+              <span className="var-tile-name">{n}</span>
+              <span className="var-tile-val">{cellText(v)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /** The current function's simple variables (numbers, text, pointers) as chips. */

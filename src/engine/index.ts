@@ -6,7 +6,7 @@ import { lowerCFamily } from './lower/cfamily';
 import { lowerCSharp } from './lower/csharp';
 import { lowerJava } from './lower/java';
 import { lowerPython } from './lower/python';
-import { findSyntaxError } from './lower/util';
+import { findPythonIndentError, findSyntaxError } from './lower/util';
 import { suggestEntry, type Suggestion } from './suggest';
 import type { Trace } from './trace';
 
@@ -167,6 +167,12 @@ export async function runCode(lang: Lang, source: string, opts: RunOptions = {})
   const tree = parser.parse(fix.code);
   if (!tree) return { compileError: { msg: 'could not parse the code', line: 1 } };
   try {
+    const indent = lang === 'python' ? findPythonIndentError(tree.rootNode) : null;
+    if (indent) {
+      return {
+        compileError: { msg: `Expected an indented block after "${indent.header}". Indent the lines that belong to it (4 spaces).`, line: indent.line },
+      };
+    }
     const syn = findSyntaxError(tree.rootNode);
     if (syn) {
       return {

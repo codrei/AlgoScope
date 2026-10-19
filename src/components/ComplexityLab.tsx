@@ -6,11 +6,36 @@ import { growthFn, labKind, measure, SIZES, type CaseKind, type Measurement } fr
 
 type Metric = 'compares' | 'swaps' | 'steps';
 
-const SERIES: { key: CaseKind; label: string; color: string; hint: string }[] = [
-  { key: 'average', label: 'Random input', color: 'var(--series-1)', hint: 'average case' },
-  { key: 'worst', label: 'Reversed / not found', color: 'var(--series-2)', hint: 'worst case' },
-  { key: 'best', label: 'Sorted / found first', color: 'var(--series-3)', hint: 'best case' },
-];
+interface Series {
+  key: CaseKind;
+  label: string;
+  color: string;
+  /** short name for line ends and table headers */
+  hint: string;
+}
+
+/**
+ * The three inputs each algorithm runs on. For searches they are the best / average / worst case by
+ * construction. For sorts they are named by the input only: which arrangement is worst depends on the
+ * algorithm (sorted input is the worst case of a last-element-pivot quick sort), so the chart marks the
+ * line that did the most and the least work from the measurements instead.
+ */
+function seriesFor(kind: 'sort' | 'linear' | 'binary'): Series[] {
+  if (kind === 'sort') {
+    return [
+      { key: 'average', label: 'Random order', color: 'var(--series-1)', hint: 'random' },
+      { key: 'worst', label: 'Reversed order', color: 'var(--series-2)', hint: 'reversed' },
+      { key: 'best', label: 'Already sorted', color: 'var(--series-3)', hint: 'sorted' },
+    ];
+  }
+  return [
+    { key: 'average', label: 'Random target', color: 'var(--series-1)', hint: 'average case' },
+    { key: 'worst', label: 'Target not in the array', color: 'var(--series-2)', hint: 'worst case' },
+    { key: 'best', label: kind === 'binary' ? 'Target in the middle' : 'Target is the first element', color: 'var(--series-3)', hint: 'best case' },
+  ];
+}
+
+const METRIC_NAME: Record<Metric, string> = { compares: 'comparisons', swaps: 'swaps', steps: 'lines executed' };
 
 interface Props {
   example: Example;
@@ -36,7 +61,7 @@ export function ComplexityLab({ example, lang, langLabel, onClose }: Props) {
     let cancelled = false;
     (async () => {
       const out = { average: [], worst: [], best: [] } as Record<CaseKind, Measurement[]>;
-      for (const s of SERIES) {
+      for (const s of seriesFor(kind)) {
         out[s.key] = await measure(example, lang, s.key);
         if (cancelled) return;
       }
@@ -89,7 +114,7 @@ export function ComplexityLab({ example, lang, langLabel, onClose }: Props) {
             {!data ? (
               <div className="lab-loading"><Loader2 className="spin" size={18} /> Running {SIZES.length * 3} experiments…</div>
             ) : (
-              <GrowthChart data={data} metric={metric} big={example.time} />
+              <GrowthChart data={data} metric={metric} big={example.time} series={seriesFor(kind)} isSort={kind === 'sort'} title={example.title} />
             )}
             {kind === 'sort' && (
               <>
@@ -116,16 +141,35 @@ function niceMax(v: number): number {
   return step * p;
 }
 
-function GrowthChart({ data, metric, big }: { data: Record<CaseKind, Measurement[]>; metric: Metric; big: string }) {
+interface ChartProps {
+  data: Record<CaseKind, Measurement[]>;
+  metric: Metric;
+  big: string;
+  series: Series[];
+  isSort: boolean;
+  title: string;
+}
+
+function GrowthChart({ data, metric, big, series: SERIES, isSort, title }: ChartProps) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 640;
   const H = 300;
   const pad = { l: 56, r: 150, t: 14, b: 40 };
   const all = SERIES.flatMap((s) => data[s.key].map((m) => m[metric]));
   const fn = growthFn(big);
-  const worst = data.worst.length ? data.worst : data.average;
-  const lastWorst = worst[worst.length - 1];
-  const scale = fn && lastWorst ? lastWorst[metric] / Math.max(1e-9, fn(lastWorst.n)) : 0;
+  // scale the reference curve to the line that did the most work at the largest n
+  const lastOf = (k: CaseKind) => data[k][data[k].length - 1];
+  const ranked = SERIES.filter((s) => lastOf(s.key)).sort((a, b) => lastOf(b.key)![metric] - lastOf(a.key)![metric]);
+  const top = ranked[0] ? lastOf(ranked[0].key) : undefined;
+  const scale = fn && top ? top[metric] / Math.max(1e-9, fn(top.n)) : 0;
+  const maxV = ranked.length ? lastOf(ranked[0].key)![metric] : 0;
+  const minV = ranked.length ? lastOf(ranked[ranked.length - 1].key)![metric] : 0;
+  const differs = ranked.length > 1 && maxV !== minV;
+  // ties count too: sorted and reversed input are both the worst case of a last-element-pivot quick sort
+  const most = isSort && differs ? ranked.filter((s) => lastOf(s.key)![metric] === maxV) : [];
+  const least = isSort && differs ? ranked.filter((s) => lastOf(s.key)![metric] === minV) : [];
+  const tag = (k: CaseKind) => (most.some((s) => s.key === k) ? ' · most work' : least.some((s) => s.key === k) ? ' · least work' : '');
+  const names = (ss: Series[]) => ss.map((s) => s.label.toLowerCase()).join(' and ');
   const ref = fn ? SIZES.map((n) => ({ n, v: fn(n) * scale })) : [];
   const yMax = niceMax(Math.max(1, ...all, ...ref.map((r) => r.v)));
   const x = (n: number) => pad.l + ((n - SIZES[0]) / (SIZES[SIZES.length - 1] - SIZES[0])) * (W - pad.l - pad.r);
@@ -154,9 +198,15 @@ function GrowthChart({ data, metric, big }: { data: Record<CaseKind, Measurement
           input is arranged (best case = worst case).
         </p>
       )}
+      {most.length > 0 && least.length > 0 && (
+        <p className="lab-insight">
+          For {title}, <b>{names(most)}</b> input {most.length > 1 ? 'need' : 'needs'} the most {METRIC_NAME[metric]} (the worst case
+          here) and <b>{names(least)}</b> input the fewest (the best case).
+        </p>
+      )}
       <div className="legend lab-legend">
         {SERIES.map((s) => (
-          <span key={s.key}><i style={{ background: s.color, borderColor: s.color }} /> {s.label} <small>({s.hint})</small></span>
+          <span key={s.key}><i style={{ background: s.color, borderColor: s.color }} /> {s.label} {isSort ? (tag(s.key) && <small>({tag(s.key).slice(3)})</small>) : <small>({s.hint})</small>}</span>
         ))}
         {fn && <span><i className="dash" /> {big} shape</span>}
       </div>
@@ -185,7 +235,7 @@ function GrowthChart({ data, metric, big }: { data: Record<CaseKind, Measurement
             );
           })}
           {ends.map(({ s, yy }) => (
-            <text key={s.key} x={W - pad.r + 10} y={yy + 4} fontSize={11.5} fontWeight={600} fill="var(--text-2)">{s.hint}</text>
+            <text key={s.key} x={W - pad.r + 10} y={yy + 4} fontSize={11.5} fontWeight={600} fill="var(--text-2)">{s.hint}{tag(s.key)}</text>
           ))}
           {SIZES.map((n, i) => (
             <rect key={n} x={x(n) - 40} y={pad.t} width={80} height={H - pad.t - pad.b} fill="transparent" onMouseEnter={() => setHover(i)} />

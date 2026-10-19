@@ -200,3 +200,27 @@ test('"Add a main() for me" turns a slide snippet into a program', async ({ page
   await page.keyboard.press('End');
   await expect(page.locator('.console')).toContainText('sum returned 23');
 });
+
+test('a 10-element array fits the panel on a 1280×720 projector', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await fresh(page, '?example=binary-search&lang=python&run=1&step=3');
+  await expect(page.locator('.step-say')).toBeVisible();
+  const panel = await page.locator('section.panel.viz').boundingBox();
+  const last = await page.locator('.cells .cell').last().boundingBox();
+  expect(last!.x + last!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+});
+
+test('present mode on a short projector puts the explanation beside the code', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await fresh(page, '?example=heap-sort&lang=java&run=1&step=30&present=1');
+  await expect(page.locator('.present-side .step-card')).toBeVisible();
+  // the whole heap tree is above the bottom of the panel
+  const tree = await page.locator('.struct', { hasText: 'as a heap' }).boundingBox();
+  const panel = await page.locator('section.panel.viz').boundingBox();
+  expect(tree!.y + tree!.height).toBeLessThanOrEqual(panel!.y + panel!.height);
+});
+
+test('Complexity Lab names the real worst case of quick sort', async ({ page }) => {
+  await fresh(page, '?example=quick-sort&lang=cpp&lab=1');
+  await expect(page.locator('.lab-insight')).toContainText('reversed order and already sorted', { timeout: 30000 });
+});
