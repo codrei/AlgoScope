@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review for AlgoScope</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      pre.mermaid { display: flex; justify-content: center; align-items: center; min-height: 260px; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <!-- Header -->
+      <header class="border-b border-stone-200 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-widest text-stone-500 font-semibold">Architecture Review · 2026-10-19</p>
+          <h1 class="text-3xl font-serif font-bold tracking-tight text-slate-900 mt-1">AlgoScope (`src/`)</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 text-xs text-slate-600 bg-white px-4 py-2.5 rounded-lg border border-stone-200 shadow-sm">
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-3.5 h-3.5 border border-slate-400 bg-white rounded-sm"></span> Module
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-5 h-0 border-t-2 border-dashed border-slate-500"></span> Seam
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-4 h-0.5 bg-red-600"></span> Leakage
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-3.5 h-3.5 rounded-sm deep border border-slate-900"></span> Deep module
+          </span>
+        </div>
+      </header>
+
+      <!-- Candidates -->
+      <section id="candidates" class="space-y-12">
+
+        <!-- Candidate 1 -->
+        <article id="candidate-1" class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-serif font-bold text-slate-900">1. Deepen step narration and event recording</h2>
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">Strong</span>
+              <span class="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-600 bg-stone-50 px-3.5 py-2 rounded border border-stone-200 flex flex-wrap gap-x-4 gap-y-1">
+            <span>src/engine/say.ts</span>
+            <span>src/engine/interp.ts</span>
+            <span>src/engine/builtins.ts</span>
+            <span>src/lib/analysis.ts</span>
+            <span>src/components/Visualizer.tsx</span>
+            <span>src/App.tsx</span>
+          </div>
+
+          <!-- Before / After Diagram (Mermaid Flowchart) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-red-700 mb-2">Before · Stringly-typed regex seam</div>
+              <pre class="mermaid">
+                flowchart TD
+                  B["builtins.ts / interp.ts"] -. "I.note = 'INSERT 5 at 2'<br/>I.compareText / I.swapText" .-> S["Interp.step()"]
+                  S -. "concatenates string<br/>step.text" .-> SAY["say.ts (30+ regexes)"]
+                  SAY -. "parses step.text" .-> OUT["step.say"]
+                  S -. "regexes on step.text" .-> AN["analysis.ts<br/>(compareOp, buildCallTree)"]
+                  OUT -. "regex /\? (Yes|No)/" .-> UI["App.tsx & Visualizer.tsx"]
+                  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+                  class B,S,SAY,AN,UI leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-emerald-700 mb-2">After · Deep StepRecorder module</div>
+              <pre class="mermaid">
+                flowchart TD
+                  B2["builtins.ts / interp.ts"] -->|"typed event<br/>(swap, compare, push, call)"| REC["StepRecorder<br/>(Deep Module)"]
+                  REC -->|"renders once"| STEP["Step<br/>(text, say, cmpOp, quiz, callInfo)"]
+                  STEP --> AN2["analysis.ts"]
+                  STEP --> UI2["App.tsx & Visualizer.tsx"]
+                  classDef deepFill fill:#0f172a,stroke:#0f172a,color:#ffffff,stroke-width:2px;
+                  class REC deepFill
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 text-sm">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Problem</h3>
+              <p class="text-slate-700">The narration module (<code class="font-mono text-xs">say.ts</code>) is shallow: <code class="font-mono text-xs">interp.ts</code> and <code class="font-mono text-xs">builtins.ts</code> format strings into transient fields, and <code class="font-mono text-xs">say.ts</code>, <code class="font-mono text-xs">analysis.ts</code>, and <code class="font-mono text-xs">Visualizer.tsx</code> re-parse those strings with 35+ regexes across the seam.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Solution</h3>
+              <p class="text-slate-700">Replace string notes and regex parsers with a deep <code class="font-mono text-xs">StepRecorder</code> module that accepts structured events, resolves event priority internally, and emits both narrations plus typed metadata on <code class="font-mono text-xs">Step</code>.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Wins</h3>
+              <ul class="list-disc list-inside text-slate-700 space-y-1">
+                <li>Locality: one module owns narration</li>
+                <li>Delete 35+ cross-file regexes</li>
+                <li>Leverage: typed <code class="font-mono text-xs">Step</code> metadata</li>
+                <li>Tests hit one clean interface</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 2 -->
+        <article id="candidate-2" class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-serif font-bold text-slate-900">2. Narrow the seam between Interp, builtins, and format</h2>
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">Strong</span>
+              <span class="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-600 bg-stone-50 px-3.5 py-2 rounded border border-stone-200 flex flex-wrap gap-x-4 gap-y-1">
+            <span>src/engine/interp.ts</span>
+            <span>src/engine/builtins.ts</span>
+            <span>src/engine/format.ts</span>
+            <span>src/engine/values.ts</span>
+          </div>
+
+          <!-- Before / After Diagram (Hand-built Mass & Seam Diagram) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Before -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-red-700 mb-2">Before · Wide interface & circular state leaks</div>
+              <div class="relative flex-1 flex flex-col justify-center gap-3 py-2">
+                <div class="border-2 border-red-500 bg-red-50/40 rounded p-3">
+                  <div class="text-xs uppercase tracking-wider font-bold text-red-900">Interp Public Surface (28 exposed fields/methods)</div>
+                  <div class="text-[11px] font-mono text-red-800 mt-1 leading-relaxed">
+                    touches · counts · note · screen · cursor · stdinPos · readElem · writeElem · lv · ev · invoke · `{ k: '__val' }` fake Expr
+                  </div>
+                </div>
+                <div class="flex items-center justify-around text-xs font-mono text-red-600">
+                  <span>↑↓ mutates internals</span>
+                  <span>↑↓ global objTextHook</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="border border-red-400 bg-white rounded p-3">
+                    <div class="text-xs uppercase tracking-wider font-bold text-slate-800">builtins.ts</div>
+                    <p class="text-[11px] text-slate-600 mt-1">Manually bumps <code class="font-mono">a.version++</code>, <code class="font-mono">I.touches.push</code>, <code class="font-mono">I.counts</code> in 40+ places</p>
+                  </div>
+                  <div class="border border-red-400 bg-white rounded p-3">
+                    <div class="text-xs uppercase tracking-wider font-bold text-slate-800">format.ts</div>
+                    <p class="text-[11px] text-slate-600 mt-1">Circular import with <code class="font-mono">interp.ts</code> via <code class="font-mono">setObjTextHook</code> singleton</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- After -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-emerald-700 mb-2">After · Narrow seam over tracked runtime containers</div>
+              <div class="relative flex-1 flex flex-col justify-center gap-3 py-2">
+                <div class="border border-slate-300 bg-white rounded p-2.5 text-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-800">builtins.ts (Evaluated Val[] + Cell refs)</div>
+                </div>
+                <div class="border-t-2 border-dashed border-slate-500 my-0.5 relative">
+                  <span class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-stone-50 px-2 text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Narrow Runtime Seam</span>
+                </div>
+                <div class="deep text-white rounded-lg p-4 shadow-md flex-1 flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-emerald-300">Deep Runtime &amp; Container Module</div>
+                  <div class="text-xs text-slate-300 mt-2 space-y-1 font-mono">
+                    <div>• Tracked Arr / MapV / Obj (auto-manages version++, touches, counts)</div>
+                    <div>• Console &amp; Stdin stream state</div>
+                    <div>• Value formatter (no global objTextHook)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 text-sm">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Problem</h3>
+              <p class="text-slate-700"><code class="font-mono text-xs">builtins.ts</code> reaches directly into <code class="font-mono text-xs">Interp</code>'s internal arrays, counters, and <code class="font-mono text-xs">version</code> fields, while <code class="font-mono text-xs">interp.ts</code> passes fake <code class="font-mono text-xs">{ k: '__val' }</code> AST nodes to <code class="font-mono text-xs">builtins.ts</code> and mutates a global hook in <code class="font-mono text-xs">format.ts</code>.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Solution</h3>
+              <p class="text-slate-700">Deepen runtime containers so mutations automatically record touches, counts, and version bumps, pass evaluated values across the <code class="font-mono text-xs">builtins.ts</code> seam, and pass object-formatting context explicitly.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Wins</h3>
+              <ul class="list-disc list-inside text-slate-700 space-y-1">
+                <li>Locality: container tracking in one place</li>
+                <li>Delete fake <code class="font-mono text-xs">__val</code> AST nodes</li>
+                <li>Remove global <code class="font-mono text-xs">objTextHook</code> state</li>
+                <li>Interface shrinks between engine modules</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 3 -->
+        <article id="candidate-3" class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-serif font-bold text-slate-900">3. Deepen trace analysis into a step view-model module</h2>
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-600 bg-stone-50 px-3.5 py-2 rounded border border-stone-200 flex flex-wrap gap-x-4 gap-y-1">
+            <span>src/lib/analysis.ts</span>
+            <span>src/lib/captions.ts</span>
+            <span>src/App.tsx</span>
+            <span>src/components/Visualizer.tsx</span>
+            <span>src/components/ArrayView.tsx</span>
+          </div>
+
+          <!-- Before / After Diagram (Cross-Section / Call-Graph Collapse) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Before -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-red-700 mb-2">Before · Domain heuristics scattered across UI</div>
+              <div class="flex-1 flex flex-col justify-center space-y-2.5">
+                <div class="h-14 border-l-4 border-red-500 bg-white px-3 py-1.5 rounded shadow-sm flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-800">App.tsx</div>
+                  <div class="text-[11px] text-slate-600 font-mono">6 memos (locks, calls, importance, keySteps, view, pos) → 17 props</div>
+                </div>
+                <div class="h-16 border-l-4 border-red-500 bg-white px-3 py-1.5 rounded shadow-sm flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-800">Visualizer.tsx (Stage &amp; StepCard)</div>
+                  <div class="text-[11px] text-slate-600 font-mono">structuresFor + beginner score filter + heapSize lookup + isMatrixGraph</div>
+                </div>
+                <div class="h-14 border-l-4 border-red-500 bg-white px-3 py-1.5 rounded shadow-sm flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-800">ArrayView.tsx &amp; Structures.tsx</div>
+                  <div class="text-[11px] text-slate-600 font-mono">markersFor + char[] null-truncation + lo..hi range dimming</div>
+                </div>
+                <div class="h-12 border-l-4 border-slate-400 bg-stone-100 px-3 py-1.5 rounded flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-600">analysis.ts &amp; captions.ts</div>
+                  <div class="text-[11px] text-slate-500 font-mono">9 separate helper functions called piecemeal</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- After -->
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-emerald-700 mb-2">After · Deep trace analysis module + thin UI adapters</div>
+              <div class="flex-1 flex flex-col justify-center space-y-3">
+                <div class="deep text-white rounded-lg p-4 border-l-4 border-emerald-400 shadow-md">
+                  <div class="text-xs uppercase tracking-wider font-bold text-emerald-300">Deep Trace Analysis Module (analysis.ts)</div>
+                  <div class="text-xs text-slate-200 font-mono mt-1">analyzeTrace(trace) → describeStep(stepIndex, mode)</div>
+                  <div class="mt-2.5 grid grid-cols-2 gap-1.5 text-[11px] text-slate-400 font-mono">
+                    <span class="bg-slate-800/80 px-2 py-1 rounded">beginner filtering</span>
+                    <span class="bg-slate-800/80 px-2 py-1 rounded">heap &amp; matrix detection</span>
+                    <span class="bg-slate-800/80 px-2 py-1 rounded">activeRange &amp; char[] bounds</span>
+                    <span class="bg-slate-800/80 px-2 py-1 rounded">locks, markers &amp; captions</span>
+                  </div>
+                </div>
+                <div class="border-t-2 border-dashed border-slate-400"></div>
+                <div class="h-14 border-l-4 border-emerald-600 bg-white px-3 py-1.5 rounded shadow-sm flex flex-col justify-center">
+                  <div class="text-xs uppercase tracking-wider font-bold text-slate-800">Visualizer.tsx / ArrayView.tsx / Structures.tsx</div>
+                  <div class="text-[11px] text-slate-600">Pure rendering of pre-classified step view-model</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 text-sm">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Problem</h3>
+              <p class="text-slate-700">Pedagogical heuristics (what is a heap, an adjacency matrix, an active subarray range, or a beginner-visible structure) are split across <code class="font-mono text-xs">App.tsx</code>, <code class="font-mono text-xs">Visualizer.tsx</code>, <code class="font-mono text-xs">ArrayView.tsx</code>, and <code class="font-mono text-xs">analysis.ts</code>, leaving them untested outside E2E runs.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Solution</h3>
+              <p class="text-slate-700">Pull all structure classification, beginner filtering, heap-size inference, and range/marker resolution behind <code class="font-mono text-xs">analysis.ts</code> so UI modules render a complete step view-model.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Wins</h3>
+              <ul class="list-disc list-inside text-slate-700 space-y-1">
+                <li>interface is the test surface (Vitest)</li>
+                <li>Locality: heuristics live in <code class="font-mono text-xs">analysis.ts</code></li>
+                <li>Eliminates 17-prop drilling in <code class="font-mono text-xs">App.tsx</code></li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 4 -->
+        <article id="candidate-4" class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-serif font-bold text-slate-900">4. Replace synthetic IR magic strings with first-class IR constructs</h2>
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-600 bg-stone-50 px-3.5 py-2 rounded border border-stone-200 flex flex-wrap gap-x-4 gap-y-1">
+            <span>src/engine/ir.ts</span>
+            <span>src/engine/lower/cfamily.ts</span>
+            <span>src/engine/lower/java.ts</span>
+            <span>src/engine/lower/csharp.ts</span>
+            <span>src/engine/lower/python.ts</span>
+            <span>src/engine/interp.ts</span>
+            <span>src/engine/suggest.ts</span>
+          </div>
+
+          <!-- Before / After Diagram (Mermaid Graph) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-red-700 mb-2">Before · Magic function names leak across IR seam</div>
+              <pre class="mermaid">
+                flowchart TD
+                  L["lower/{cfamily,java,csharp,python}.ts"] -. "call('__closure__', 'lambda@ln')<br/>call('__fieldinit__')<br/>method '__get_Prop'" .-> P["Program.funcs / classes"]
+                  P -. "filter !k.includes('@')" .-> IDX["engine/index.ts"]
+                  P -. "filter !k.includes('@')<br/>!m.startsWith('__')" .-> SUG["engine/suggest.ts"]
+                  P -. "intercept '__closure__'<br/>& '__fieldinit__' in evCall" .-> INT["engine/interp.ts"]
+                  classDef leak stroke:#dc2626,stroke-width:2px,color:#991b1b;
+                  class L,P,IDX,SUG,INT leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-emerald-700 mb-2">After · Explicit IR nodes &amp; shared lowering helpers</div>
+              <pre class="mermaid">
+                flowchart TD
+                  L2["lower/* + shared util.ts"] -->|"typed Closure / Getter / FieldInit"| IR["Program (ir.ts)<br/>Clean IR Seam"]
+                  IR --> IDX2["engine/index.ts"]
+                  IR --> SUG2["engine/suggest.ts"]
+                  IR --> INT2["engine/interp.ts"]
+                  classDef deepFill fill:#0f172a,stroke:#0f172a,color:#ffffff,stroke-width:2px;
+                  class IR deepFill
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 text-sm">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Problem</h3>
+              <p class="text-slate-700">Language front-ends encode closures, C++ member initializers, and C# properties as fake calls (<code class="font-mono text-xs">__closure__</code>, <code class="font-mono text-xs">__fieldinit__</code>) and mangled keys (<code class="font-mono text-xs">lambda@12:4</code>, <code class="font-mono text-xs">__get_X</code>) in <code class="font-mono text-xs">Program</code>, forcing <code class="font-mono text-xs">index.ts</code>, <code class="font-mono text-xs">suggest.ts</code>, and <code class="font-mono text-xs">interp.ts</code> to filter magic strings.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Solution</h3>
+              <p class="text-slate-700">Represent statement/expression closures, property getters, and field initializers as explicit <code class="font-mono text-xs">ir.ts</code> constructs and consolidate duplicated enum/lambda/array-init lowering in <code class="font-mono text-xs">lower/util.ts</code>.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Wins</h3>
+              <ul class="list-disc list-inside text-slate-700 space-y-1">
+                <li>Stop leaking <code class="font-mono text-xs">@</code> / <code class="font-mono text-xs">__</code> across IR seam</li>
+                <li>Locality: one closure mechanism in <code class="font-mono text-xs">Interp</code></li>
+                <li>Deduplicate Java/C# lowering helpers</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 5 -->
+        <article id="candidate-5" class="bg-white rounded-xl border border-stone-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-xl font-serif font-bold text-slate-900">5. Single-pass entry suggestion and typed IR visitor</h2>
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-300">Speculative</span>
+              <span class="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 border border-stone-200 font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="font-mono text-sm text-slate-600 bg-stone-50 px-3.5 py-2 rounded border border-stone-200 flex flex-wrap gap-x-4 gap-y-1">
+            <span>src/engine/index.ts</span>
+            <span>src/engine/suggest.ts</span>
+            <span>src/engine/lower/util.ts</span>
+          </div>
+
+          <!-- Before / After Diagram (Call-Graph Collapse) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-red-700 mb-2">Before · Double lowering &amp; untyped AST reflection</div>
+              <div class="flex-1 flex flex-col justify-center space-y-2.5 font-mono text-xs">
+                <div class="border border-slate-300 bg-white p-2.5 rounded">
+                  1. <span class="font-bold">runCode()</span> calls <span class="text-red-700">lower*(root, true)</span>
+                </div>
+                <div class="border border-red-400 bg-red-50/50 p-2.5 rounded text-red-900">
+                  2. Throws <span class="font-bold">CompileError("No main()")</span>
+                </div>
+                <div class="border border-red-400 bg-red-50/50 p-2.5 rounded text-red-900">
+                  3. Catch block re-runs <span class="font-bold">lower*(root, false)</span> from scratch
+                </div>
+                <div class="border border-red-400 bg-white p-2.5 rounded text-slate-700">
+                  4. <span class="font-bold">suggest.ts</span> walks IR via untyped <span class="text-red-700">Object.values(stmt)</span> reflection
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50/50 p-4 flex flex-col justify-between min-h-[320px]">
+              <div class="text-xs uppercase tracking-wider font-semibold text-emerald-700 mb-2">After · Single lowering pass &amp; shared IR visitor</div>
+              <div class="flex-1 flex flex-col justify-center space-y-3 font-mono text-xs">
+                <div class="deep text-white p-4 rounded-lg shadow-md space-y-2">
+                  <div class="text-emerald-300 font-bold uppercase tracking-wider">1. Single-pass lower*(root) → Program</div>
+                  <div class="text-slate-300">Returns <code class="text-white">Program</code> with optional <code class="text-white">entry</code></div>
+                  <div class="border-t border-slate-700 pt-2 text-emerald-300 font-bold uppercase tracking-wider">2. Shared walkIR(stmts, visitor)</div>
+                  <div class="text-slate-300">Reused by <code class="text-white">collectIndexVars</code>, <code class="text-white">callsIn</code>, and <code class="text-white">returnsValue</code></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 text-sm">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Problem</h3>
+              <p class="text-slate-700">When a student's code has no <code class="font-mono text-xs">main()</code>, <code class="font-mono text-xs">runCode</code> throws inside lowering and lowers the syntax tree a second time in the catch block, while <code class="font-mono text-xs">suggest.ts</code> inspects IR nodes using fragile <code class="font-mono text-xs">Object.values</code> reflection.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Solution</h3>
+              <p class="text-slate-700">Make <code class="font-mono text-xs">lower*</code> always return <code class="font-mono text-xs">Program</code> so <code class="font-mono text-xs">runCode</code> handles missing <code class="font-mono text-xs">prog.entry</code> in one pass, and extract a single typed IR visitor shared by <code class="font-mono text-xs">util.ts</code> and <code class="font-mono text-xs">suggest.ts</code>.</p>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Wins</h3>
+              <ul class="list-disc list-inside text-slate-700 space-y-1">
+                <li>Delete <code class="font-mono text-xs">requireEntry</code> parameter</li>
+                <li>Locality: one typed IR walker</li>
+                <li>Eliminates double AST lowering</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- Top Recommendation -->
+      <section id="top-recommendation" class="pt-4">
+        <div class="deep text-white rounded-xl p-8 shadow-lg border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div class="space-y-2">
+            <div class="text-xs uppercase tracking-widest text-emerald-400 font-bold">Top Recommendation</div>
+            <h2 class="text-2xl font-serif font-bold">1. Deepen step narration and event recording</h2>
+            <p class="text-slate-300 text-sm max-w-2xl">
+              Replacing stringly-typed <code class="font-mono text-xs text-emerald-300">I.note</code> mutations and <code class="font-mono text-xs text-emerald-300">say.ts</code> regexes with a structured <code class="font-mono text-xs text-emerald-300">StepRecorder</code> module eliminates ~35 fragile regexes across 5 modules and gives both the engine and UI a single, high-leverage seam.
+            </p>
+          </div>
+          <a href="#candidate-1" class="shrink-0 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm transition">
+            Review Candidate 1 ↑
+          </a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
