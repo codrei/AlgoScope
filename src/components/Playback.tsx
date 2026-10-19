@@ -1,5 +1,49 @@
 import { ChevronLeft, ChevronRight, HelpCircle, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 
+/** The parts of the algorithm as a strip of segments: where am I, and jump to any part. */
+export function ChapterBar({ chapters, pos, total, onJump, onStep }: {
+  chapters: { pos: number; label: string }[];
+  pos: number;
+  total: number;
+  onJump: (pos: number) => void;
+  onStep: (dir: 1 | -1) => void;
+}) {
+  let cur = -1;
+  chapters.forEach((c, k) => {
+    if (c.pos <= pos) cur = k;
+  });
+  const name = cur >= 0 ? chapters[cur].label : 'Getting started';
+  return (
+    <div className="chapters" aria-label="Parts of the algorithm">
+      <button className="ch-btn" onClick={() => onStep(-1)} disabled={pos === 0} title="Previous part (Page Up)" aria-label="Previous part">
+        <ChevronLeft size={16} />
+      </button>
+      <div className="ch-name" aria-live="polite">
+        <b>{name}</b>
+        <small>part {Math.max(1, cur + 1)} of {chapters.length}</small>
+      </div>
+      <div className="ch-track">
+        {chapters.map((c, k) => {
+          const end = chapters[k + 1]?.pos ?? total;
+          return (
+            <button
+              key={`${c.pos}-${k}`}
+              className={`ch-seg ${k < cur ? 'done' : k === cur ? 'current' : ''}`}
+              style={{ flexGrow: Math.max(1, end - c.pos) }}
+              onClick={() => onJump(c.pos)}
+              title={c.label}
+              aria-label={`Go to ${c.label}`}
+            />
+          );
+        })}
+      </div>
+      <button className="ch-btn" onClick={() => onStep(1)} disabled={cur >= chapters.length - 1} title="Next part (Page Down)" aria-label="Next part">
+        <ChevronRight size={16} />
+      </button>
+    </div>
+  );
+}
+
 export const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4, 8];
 
 interface Props {

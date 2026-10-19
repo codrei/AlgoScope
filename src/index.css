@@ -2111,3 +2111,190 @@ input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* chapters: the parts of the algorithm above the playback controls */
+.chapters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.ch-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  max-width: 230px;
+  line-height: 1.15;
+}
+
+.ch-name b {
+  font-size: 13.5px;
+  color: var(--nu-blue);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme='dark'] .ch-name b { color: var(--nu-gold); }
+
+.ch-name small {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.ch-track {
+  flex: 1;
+  display: flex;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ch-seg {
+  height: 10px;
+  min-width: 3px;
+  flex-basis: 0;
+  border: none;
+  border-radius: 5px;
+  background: var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ch-seg.done { background: color-mix(in srgb, var(--nu-blue) 45%, var(--border)); }
+.ch-seg.current { background: var(--nu-gold); outline: 2px solid var(--nu-blue); outline-offset: 1px; }
+:root[data-theme='dark'] .ch-seg.done { background: color-mix(in srgb, var(--nu-gold) 40%, var(--border)); }
+.ch-seg:hover { filter: brightness(0.9); }
+
+.ch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ch-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* end of a run: what it cost and what the Big-O means */
+.run-summary {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--locked) 12%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--locked) 55%, transparent);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.run-summary p { margin: 2px 0; }
+.run-summary-head { font-size: 15px; }
+
+.run-summary-btn {
+  margin-top: 6px;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 700;
+  background: var(--nu-blue);
+  color: #fff;
+  cursor: pointer;
+}
+
+:root[data-theme='dark'] .run-summary-btn { background: var(--nu-gold); color: #24235e; }
+
+/* the reel's "SORTED" moment: once everything is in place the cells bounce left to right */
+.cells.all-sorted .cell-col .cell {
+  animation: sorted-wave 0.55s ease calc(var(--k, 0) * 70ms) 1 both;
+}
+
+@keyframes sorted-wave {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cells.all-sorted .cell-col .cell { animation: none; }
+}
+
+/* under the idea sentence: the same step in code terms, smaller */
+.step-say-code {
+  margin: 0 0 2px;
+  font-size: 13.5px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+.main.present .step-say-code { font-size: 15px; }
+
+/* moving values: a copied value slides from its old cell; a value from a variable drops in */
+.cell.anim-slide {
+  animation: slide-in 0.45s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+@keyframes slide-in {
+  from { transform: translateX(var(--dx)); }
+  to { transform: none; }
+}
+
+.cell.anim-drop {
+  animation: drop-in 0.4s ease-out;
+}
+
+@keyframes drop-in {
+  from { transform: translateY(-28px); opacity: 0.3; }
+  to { transform: none; opacity: 1; }
+}
+
+/* the cell a value was copied away from: an empty slot until something is written into it */
+.cell.gap {
+  border-style: dashed;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
+  opacity: 0.75;
+}
+
+/* the value waiting to be placed (insertion sort's key) floats above the gap */
+.held {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 2px solid var(--nu-gold-deep, #c9a400);
+  background: var(--write-bg);
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(20, 20, 60, 0.15);
+}
+
+.held small {
+  font-size: 11px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell.anim-slide, .cell.anim-drop { animation: none; }
+}
+
+/* "built from": the cells a new value was computed from (DP tables, dp[i-1] + dp[i-2]) */
+.gcell.source,
+.cell.source {
+  border: 2px dashed var(--compare);
+  background: color-mix(in srgb, var(--compare-bg) 70%, transparent);
+}
+
+.legend i.source { border: 2px dashed var(--compare); background: var(--compare-bg); }

@@ -10,6 +10,8 @@ export function Grid2D({ item, names, step }: { item: HeapArr; names: string[]; 
   const hotCols = new Set<number>();
   const rowRoles = rows.map((r) => (r && r.kind === 'arr' ? rolesFor(step, r.id) : new Map()));
   rowRoles.forEach((m) => m.forEach((_, c) => hotCols.add(c)));
+  // when a cell is being computed, the cells it was read from are its sources (DP: "built from")
+  const computing = rowRoles.some((m) => [...m.values()].includes('write'));
   const tooBig = cols > 30 || rows.length > 30;
   return (
     <div className="struct">
@@ -26,7 +28,8 @@ export function Grid2D({ item, names, step }: { item: HeapArr; names: string[]; 
               <div key={`h${ri}`} className={`ghead ${hotRow ? 'hot' : ''}`}>{ri}</div>,
               ...Array.from({ length: cols }, (_, c) => {
                 if (!r || r.kind !== 'arr' || c >= r.items.length) return <div key={`${ri}-${c}`} />;
-                const role = rowRoles[ri].get(c) ?? '';
+                const r0 = rowRoles[ri].get(c) ?? '';
+                const role = r0 === 'read' && computing ? 'source' : r0;
                 return (
                   <div key={`${ri}-${c}`} className={`gcell ${role}`} style={tooBig ? { minWidth: 26, height: 26, fontSize: 11 } : undefined}>
                     {cellText(r.items[c])}

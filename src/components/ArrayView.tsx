@@ -67,9 +67,13 @@ interface Props {
   info?: string;
   /** the part of the array in use (cells outside are faded) */
   activeRange?: { lo: number; hi: number };
+  /** a cell that is conceptually empty after its value was copied away (insertion sort's shift) */
+  gapAt?: number;
+  /** the value waiting to be placed while there is a gap: insertion sort's key */
+  held?: { name: string; value: string };
 }
 
-export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big, fieldMarkers, info, activeRange }: Props) {
+export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big, fieldMarkers, info, activeRange, gapAt, held }: Props) {
   const roles = rolesFor(step, item.id);
   const n = item.items.length;
   const markers = markersFor(step, item.id, n);
@@ -99,6 +103,13 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
   const pair = swp.length === 2 ? swp : cmp.length === 2 ? cmp : null;
   const op = swp.length === 2 ? '⇄' : compareOp(step.text) ?? '';
   const swapAnim = swp.length === 2 ? { a: Math.min(...swp), b: Math.max(...swp) } : null;
+  // a value copied inside this array slides from where it came from; a value from a variable drops in
+  const mine = step.touches.filter((t) => t.id === item.id);
+  const wr = mine.filter((t) => t.role === 'write');
+  const rd = mine.filter((t) => t.role === 'read');
+  const moveAnim = !swapAnim && wr.length === 1 && step.kind !== 'swap'
+    ? { to: wr[0].idx, from: rd.length === 1 && rd[0].idx !== wr[0].idx ? rd[0].idx : null }
+    : null;
 
   // active range (left..right / low..high): cells outside it are dimmed
   const find = (names: string[]) => {
@@ -133,7 +144,7 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
   return (
     <div className="struct" ref={box}>
       <Label names={names} kind={kindLabel(kind)} n={n} sorted={allLocked} info={info} />
-      <div className="cells" style={style}>
+      <div className={`cells ${allLocked ? 'all-sorted' : ''}`} style={style}>
         {n === 0 && <div className="cell null">empty</div>}
         {pair && (
           <div
@@ -152,13 +163,24 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
             const from = i === swapAnim.a ? swapAnim.b : swapAnim.a;
             anim = from < i ? 'anim-up' : 'anim-down';
             animStyle = { '--dx': `${(from - i) * pitch}px` } as CSSProperties;
+          } else if (moveAnim && i === moveAnim.to) {
+            anim = moveAnim.from !== null ? 'anim-slide' : 'anim-drop';
+            if (moveAnim.from !== null) animStyle = { '--dx': `${(moveAnim.from - i) * pitch}px` } as CSSProperties;
           }
+          const isGap = gapAt === i && role !== 'write';
+          // computed values (fib: dp[i] = dp[i-1] + dp[i-2]): the cells read are the sources
+          const isSource = role === 'read' && wr.length > 0 && rd.length >= 2;
           const dim = range && (i < range.lo || i > range.hi) && !role && !isLocked;
-          const cls = ['cell', isLocked ? 'locked' : role ?? '', v.t === 'null' ? 'null' : '', v.t === 'r' ? 'ref' : '', anim, dim ? 'dim' : ''].join(' ');
+          const cls = ['cell', isLocked ? 'locked' : isSource ? 'source' : role ?? '', v.t === 'null' ? 'null' : '', v.t === 'r' ? 'ref' : '', anim, dim ? 'dim' : '', isGap ? 'gap' : ''].join(' ');
           const mk = markers.get(i);
           return (
-            <div className="cell-col" key={i}>
-              <div key={anim ? `a${stepIndex}` : 's'} className={cls} style={animStyle} title={`${names[0] ?? 'arr'}[${i}] = ${cellText(v)}`}>
+            <div className="cell-col" key={i} style={allLocked ? ({ '--k': i } as CSSProperties) : undefined}>
+              {isGap && held && (
+                <div className="held" title={`${held.name} holds ${held.value} until it is placed`}>
+                  <small>{held.name}</small> {held.value}
+                </div>
+              )}
+              <div key={anim ? `a${stepIndex}` : 's'} className={cls} style={animStyle} title={isGap ? `gap: the value ${cellText(v)} was copied away from here` : `${names[0] ?? 'arr'}[${i}] = ${cellText(v)}`}>
                 {cellText(v)}
               </div>
               <div className="cell-idx">{i}</div>

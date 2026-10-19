@@ -30,6 +30,24 @@ Two switches control how much the class sees.
 
 The explanation box stays pinned at the bottom of the panel, so it is visible even on small laptop screens.
 
+## Following along
+
+- **Parts bar:** above the playback controls, the run is split into the parts of the algorithm: *Pass 2 of 5* in
+  Bubble Sort, *Merge [0..2]* in Merge Sort, *Build the heap* in Heap Sort, *Visit 3* in BFS, *push(10)* in a stack
+  program. Click a part to jump to it, or press **Page Up** / **Page Down**. Your own code gets parts too: each
+  operation called from `main` (push, pop, insert…), or each round of the main loop.
+- **Idea first, code second:** in the built-in examples the big sentence explains the idea of each key moment with
+  the real values, for example *"Is 8 bigger than the key 4? Yes, so 8 shifts one place right to make room"* or
+  *"dp[7] = dp[6] + dp[5] = 8 + 5 = 13"*. The same step in code terms is the small grey line underneath.
+- **Moving values:** a value copied to another cell slides there, and the cell it left becomes a dashed **gap**
+  (no confusing duplicate like `1 5 5 2`). Insertion Sort's `key` floats above the gap until it is dropped in;
+  a swap's `temp` does the same in Every line mode.
+- **Built from:** when a DP cell (Knapsack, LCS, Fibonacci, Floyd–Warshall) is computed, the cells it was built from
+  get a dashed outline.
+- **End of the run:** the last step sums up the work (comparisons, swaps, writes, calls) and what the example's
+  Big-O means when the input doubles, with a button into the Complexity Lab. When a sort finishes, the cells bounce
+  once, left to right.
+
 ## Predict mode (for class discussion)
 
 Turn on **Predict** in the playback bar. Before every comparison the animation stops and asks the class, for

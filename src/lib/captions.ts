@@ -5,20 +5,43 @@ import type { SnapVal, Step } from '../engine/trace';
 
 const norm = (s: string) => s.toLowerCase().replace(/[_\s]/g, '');
 
+/** facts about the whole run that a single step cannot know (computed once per run) */
+export interface RunInfo {
+  /** heap sort: the first step of the "move the largest to the end" phase */
+  extractFrom?: number;
+}
+
 interface Ctx {
   step: Step;
+  /** index of this step in the run, and facts about the whole run */
+  index: number;
+  info: RunInfo;
   /** innermost frame whose function name matches */
   inFn: (name: string) => boolean;
   num: (...names: string[]) => number | undefined;
   str: (...names: string[]) => string | undefined;
   arr: (name: string, idx: number | undefined) => string | undefined;
+  /** a value inside a 2D array: graph[u][v] */
+  arr2: (name: string, i: number | undefined, j: number | undefined) => string | undefined;
+  /** did this step write the 2D cell name[i][j]? */
+  wrote2: (name: string, i: number | undefined, j: number | undefined) => boolean;
+  /** a field of an object variable: root.data */
+  field: (name: string, field: string) => string | undefined;
+  /** the array cells this step compared / wrote / swapped, with their values */
+  touched: (role: 'compare' | 'write' | 'swap' | 'read', arrName?: string) => { idx: number; v: string; n?: number }[];
+  /** the result of this step's condition (→ true / → false), if it has one */
+  outcome: () => boolean | undefined;
   calls: number;
 }
 
-function makeCtx(step: Step): Ctx {
+function makeCtx(step: Step, index = 0, info: RunInfo = {}): Ctx {
   const frames = [...step.frames].reverse();
   const top = frames[0];
   const find = (names: string[]): SnapVal | undefined => {
+    // exact names first: knapsack has both w (the column) and W (the capacity)
+    for (const f of frames) {
+      for (const [n, v] of f.vars) if (names.includes(n)) return v;
+    }
     const wanted = names.map(norm);
     for (const f of frames) {
       for (const [n, v] of f.vars) if (wanted.includes(norm(n))) return v;
@@ -27,6 +50,8 @@ function makeCtx(step: Step): Ctx {
   };
   return {
     step,
+    index,
+    info,
     inFn: (name) => !!top && norm(top.name).replace(/^.*\./, '') === norm(name),
     num: (...names) => {
       const v = find(names);
@@ -50,6 +75,47 @@ function makeCtx(step: Step): Ctx {
       if (h?.kind !== 'arr') return undefined;
       const x = h.items[idx];
       return x && x.t === 'p' ? x.s : undefined;
+    },
+    arr2: (name, i, j) => {
+      if (i === undefined || j === undefined) return undefined;
+      const v = find([name]);
+      if (!v || v.t !== 'r') return undefined;
+      const row = step.heap[v.id];
+      const rv = row?.kind === 'arr' ? row.items[i] : undefined;
+      if (!rv || rv.t !== 'r') return undefined;
+      const h = step.heap[rv.id];
+      const x = h?.kind === 'arr' ? h.items[j] : undefined;
+      return x && x.t === 'p' ? x.s : undefined;
+    },
+    wrote2: (name, i, j) => {
+      if (i === undefined || j === undefined) return false;
+      const v = find([name]);
+      const outer = v && v.t === 'r' ? step.heap[v.id] : undefined;
+      const row = outer?.kind === 'arr' ? outer.items[i] : undefined;
+      return !!row && row.t === 'r' && step.touches.some((t) => t.role === 'write' && t.id === row.id && t.idx === j);
+    },
+    field: (name, fieldName) => {
+      const v = find([name]);
+      if (!v || v.t !== 'r') return undefined;
+      const h = step.heap[v.id];
+      if (h?.kind !== 'obj') return undefined;
+      const x = h.fields.find(([k]) => norm(k) === norm(fieldName))?.[1];
+      return x && x.t === 'p' ? x.s : undefined;
+    },
+    touched: (role, arrName) => {
+      const only = arrName ? find([arrName]) : undefined;
+      const onlyId = only && only.t === 'r' ? only.id : undefined;
+      return step.touches
+        .filter((t) => t.role === role && (!arrName || t.id === onlyId))
+        .map((t) => {
+          const h = step.heap[t.id];
+          const x = h?.kind === 'arr' ? h.items[t.idx] : undefined;
+          return { idx: t.idx, v: x && x.t === 'p' ? x.s : '?', n: x && x.t === 'p' ? x.n : undefined };
+        });
+    },
+    outcome: () => {
+      const m = /→ (true|false)/.exec(step.text);
+      return m ? m[1] === 'true' : undefined;
     },
     calls: step.counts.calls,
   };
@@ -76,8 +142,10 @@ const CAPTIONS: Record<string, CaptionFn> = {
     const i = c.num('i');
     const key = c.num('key');
     if (!c.inFn('insertionSort') || i === undefined) return null;
-    return key === undefined
-      ? `Round ${i}: take the next value and slide it into the sorted part on the left.`
+    // at the start of a round key still holds the previous round's value
+    const newRound = /^FOR |^(i\+\+|i \+= 1) · /.test(c.step.text) || key === undefined;
+    return newRound
+      ? `Round ${i}: take the next value (${c.arr('arr', i) ?? '?'}) and slide it into the sorted part on the left.`
       : `Round ${i}: insert the key ${key} into the sorted part on the left, shifting bigger values right.`;
   },
   'merge-sort': (c) => {
@@ -202,9 +270,10 @@ const CAPTIONS: Record<string, CaptionFn> = {
   'heap-sort': (c) => {
     const n = c.num('n');
     const i = c.num('i');
+    const extracting = c.info.extractFrom !== undefined && c.index >= c.info.extractFrom;
     if (c.inFn('heapify') && i !== undefined) return `Repair the heap at index ${i}: a parent must be bigger than both children (heap size ${n ?? ''}).`;
-    if (c.inFn('heapSort') && i !== undefined) return `Move the largest value (arr[0]) into its final place, then repair the smaller heap.`;
-    if (c.inFn('heapSort')) return 'First build a max-heap: the largest value rises to the top (arr[0]).';
+    if (c.inFn('heapSort') && extracting) return 'Move the largest value (arr[0]) into its final place at the end, then repair the smaller heap.';
+    if (c.inFn('heapSort')) return 'First build a max-heap: fix every parent from the last one up to the root, so the largest value rises to arr[0].';
     return null;
   },
   'counting-sort': (c) => {
@@ -360,18 +429,371 @@ const CAPTIONS: Record<string, CaptionFn> = {
 };
 
 /** The algorithm-level caption for a step of a built-in example (or null). */
-export function captionFor(exampleId: string, step: Step): string | null {
-  const fn = CAPTIONS[exampleId];
+export function captionFor(exampleId: string, step: Step, index = 0, info: RunInfo = {}): string | null {
+  return fromTable(CAPTIONS, exampleId, step, index, info);
+}
+
+function fromTable(table: Record<string, CaptionFn>, exampleId: string, step: Step, index: number, info: RunInfo): string | null {
+  const fn = table[exampleId];
   if (!fn) return null;
   try {
     // inside a small helper (swap, max...) use the caption of the function that called it
     for (let drop = 0; drop < 3 && drop < step.frames.length; drop++) {
       const frames = drop ? step.frames.slice(0, -drop) : step.frames;
-      const c = fn(makeCtx({ ...step, frames }));
+      const c = fn(makeCtx({ ...step, frames }, index, info));
       if (c) return c;
     }
     return null;
   } catch {
     return null;
   }
+}
+
+/** Facts about a whole run that the captions and chapters of an example need. */
+export function runInfo(exampleId: string, steps: Step[]): RunInfo {
+  const info: RunInfo = {};
+  if (exampleId === 'heap-sort') {
+    // the extract phase starts when heapSort itself (not heapify) first moves arr[0] to the end;
+    // its loop check just before that is where the phase begins
+    const inSort = (st: Step) => {
+      const top = st.frames[st.frames.length - 1];
+      return !!top && norm(top.name).replace(/^.*\./, '') === 'heapsort';
+    };
+    const first = steps.findIndex((st) => inSort(st) && st.touches.some((t) => t.idx === 0 && (t.role === 'write' || t.role === 'swap')));
+    if (first >= 0) {
+      let k = first;
+      while (k > 0 && !(inSort(steps[k]) && steps[k].kind === 'check')) k--;
+      info.extractFrom = k;
+    }
+  }
+  return info;
+}
+
+/**
+ * Moments: the idea behind a key step of a built-in example, in words and values
+ * ("Is 8 bigger than the key 4? Yes, so 8 shifts one place right"). They are shown instead of the
+ * code-level sentence, which stays underneath in smaller text.
+ */
+const MOMENTS: Record<string, CaptionFn> = {
+  'bubble-sort': (c) => {
+    if (!c.inFn('bubbleSort')) return null;
+    const cmp = c.touched('compare');
+    if (c.step.kind === 'compare' && cmp.length === 2) {
+      const [a, b] = cmp[0].idx < cmp[1].idx ? cmp : [cmp[1], cmp[0]];
+      return c.outcome()
+        ? `Compare the neighbors ${a.v} and ${b.v}: is ${a.v} bigger? Yes, they are in the wrong order, so they swap.`
+        : `Compare the neighbors ${a.v} and ${b.v}: is ${a.v} bigger? No, they are already in order.`;
+    }
+    const sw = c.touched('swap');
+    if (c.step.kind === 'swap' && sw.length === 2) {
+      const [a, b] = sw[0].idx < sw[1].idx ? sw : [sw[1], sw[0]];
+      return `Swap: ${b.v} moves right and ${a.v} moves left. The bigger value keeps bubbling toward the end.`;
+    }
+    return null;
+  },
+  'selection-sort': (c) => {
+    if (!c.inFn('selectionSort')) return null;
+    const j = c.num('j');
+    const min = c.arr('arr', c.num('minIdx', 'min_idx', 'minIndex'));
+    if (c.step.kind === 'compare' && j !== undefined) {
+      const v = c.arr('arr', j);
+      return c.outcome()
+        ? `Is ${v} smaller than the smallest so far (${min})? Yes, so ${v} becomes the new smallest.`
+        : `Is ${v} smaller than the smallest so far (${min})? No, ${min} is still the smallest.`;
+    }
+    const sw = c.touched('swap');
+    if (c.step.kind === 'swap' && sw.length === 2) {
+      const i = c.num('i');
+      const into = sw.find((t) => t.idx === i) ?? sw[0];
+      return `Swap the smallest value ${into.v} into position ${i}. Everything up to index ${i} is now sorted.`;
+    }
+    return null;
+  },
+  'insertion-sort': (c) => {
+    if (!c.inFn('insertionSort')) return null;
+    const key = c.num('key');
+    const j = c.num('j');
+    if (c.step.kind === 'compare' && j !== undefined && j >= 0) {
+      const v = c.arr('arr', j);
+      return c.outcome()
+        ? `Is ${v} bigger than the key ${key}? Yes, so ${v} shifts one place right to make room.`
+        : `Is ${v} bigger than the key ${key}? No, so the key belongs right after it.`;
+    }
+    const w = c.touched('write');
+    if (w.length === 1) {
+      const copied = c.touched('read').length > 0 && String(w[0].n) !== String(key);
+      return copied
+        ? `Shift ${w[0].v} one place right, into index ${w[0].idx}. Its old spot is the gap the key can move into.`
+        : `Drop the key ${w[0].v} into the gap at index ${w[0].idx}. The left part is sorted again.`;
+    }
+    return null;
+  },
+  'quick-sort': (c) => {
+    if (!c.inFn('partition')) return null;
+    const pivot = c.num('pivot');
+    const j = c.num('j');
+    if (c.step.kind === 'compare' && j !== undefined) {
+      const v = c.arr('arr', j);
+      return c.outcome()
+        ? `Is ${v} smaller than the pivot ${pivot}? Yes, so it belongs on the left side.`
+        : `Is ${v} smaller than the pivot ${pivot}? No, so it stays on the right side.`;
+    }
+    const sw = c.touched('swap');
+    if (c.step.kind === 'swap' && sw.length === 2) {
+      const high = c.num('high');
+      if (sw.some((t) => t.idx === high)) {
+        const at = sw.find((t) => t.idx !== high)!;
+        return `Put the pivot ${pivot} between the two sides, at index ${at.idx}. It is now in its final place.`;
+      }
+      return `Move ${sw.find((t) => t.n !== undefined && pivot !== undefined && t.n <= pivot)?.v ?? sw[0].v} into the left side (the values smaller than the pivot).`;
+    }
+    return null;
+  },
+  'heap-sort': (c) => {
+    const sw = c.touched('swap');
+    if (c.inFn('heapify')) {
+      const left = c.num('left');
+      const right = c.num('right');
+      const largest = c.num('largest');
+      const i = c.num('i');
+      const cmp = c.touched('compare');
+      if (c.step.kind === 'compare' && cmp.length === 2) {
+        const child = cmp.find((t) => t.idx === left || t.idx === right);
+        const other = cmp.find((t) => t !== child);
+        if (child && other) {
+          const side = child.idx === left ? 'left' : 'right';
+          const who = other.idx === i ? `the parent ${other.v}` : `the bigger child so far, ${other.v}`;
+          return c.outcome()
+            ? `Is the ${side} child ${child.v} bigger than ${who}? Yes, so it is the largest so far.`
+            : `Is the ${side} child ${child.v} bigger than ${who}? No.`;
+        }
+      }
+      if (c.step.kind === 'swap' && sw.length === 2 && largest !== undefined) {
+        const parent = sw.find((t) => t.idx === i);
+        const child = sw.find((t) => t.idx !== i);
+        return `The parent ${child?.v} was smaller than its child ${parent?.v}: swap them, so the bigger value is on top. Then repair below.`;
+      }
+      return null;
+    }
+    if (c.inFn('heapSort') && c.step.kind === 'swap' && sw.length === 2) {
+      const end = sw.find((t) => t.idx !== 0);
+      return `The largest value ${end?.v} is at the top (arr[0]). Move it to its final place at index ${end?.idx}.`;
+    }
+    return null;
+  },
+  'merge-sort': (c) => {
+    if (!c.inFn('merge')) return null;
+    // the two front values being compared, whatever the index variables are called (i/j, a/b)
+    const a = c.touched('compare', 'L')[0]?.v;
+    const b = c.touched('compare', 'R')[0]?.v;
+    if (c.step.kind === 'compare' && a !== undefined && b !== undefined) {
+      return c.outcome()
+        ? `Which front value is smaller, ${a} (left half) or ${b} (right half)? ${a}, so it goes next.`
+        : `Which front value is smaller, ${a} (left half) or ${b} (right half)? ${b}, so it goes next.`;
+    }
+    const w = c.touched('write', 'arr');
+    if (w.length === 1) return `Write ${w[0].v} into arr[${w[0].idx}]. The merged part grows by one.`;
+    return null;
+  },
+  'linear-search': (c) => {
+    if (!c.inFn('linearSearch') || c.step.kind !== 'compare') return null;
+    const i = c.num('i');
+    const t = c.num('target');
+    const v = c.arr('arr', i);
+    if (v === undefined) return null;
+    return c.outcome() ? `Is ${v} the target ${t}? Yes, found it at index ${i}.` : `Is ${v} the target ${t}? No, so look at the next element.`;
+  },
+  'binary-search': (c) => {
+    if (!c.inFn('binarySearch') || c.step.kind !== 'compare') return null;
+    const mid = c.num('mid');
+    const t = c.num('target');
+    const v = c.arr('arr', mid);
+    if (v === undefined || t === undefined) return null;
+    const n = Number(v);
+    if (n === t) return `The middle value is ${v}. That is the target: found it at index ${mid}.`;
+    // the "== target" check comes first; the next check decides which half to drop
+    if (/==/.test(c.step.text)) return `Look at the middle value, arr[${mid}] = ${v}. Is it the target ${t}? No.`;
+    return n < t
+      ? `The middle value is ${v}, smaller than ${t}. The target can only be in the right half, so drop the left half.`
+      : `The middle value is ${v}, bigger than ${t}. The target can only be in the left half, so drop the right half.`;
+  },
+  'binary-search-tree': (c) => {
+    if (!c.inFn('insert') || c.step.kind !== 'check' || !/</.test(c.step.text)) return null;
+    const key = c.num('key');
+    const here = c.field('root', 'key') ?? c.field('root', 'data') ?? c.field('node', 'key');
+    if (key === undefined || here === undefined) return null;
+    return key < Number(here)
+      ? `${key} is smaller than ${here}, so it goes into the left subtree.`
+      : `${key} is not smaller than ${here}, so it goes into the right subtree.`;
+  },
+  dijkstra: (c) => {
+    if (!c.inFn('dijkstra') || c.step.kind !== 'compare') return null;
+    const u = c.num('u');
+    const v = c.num('v');
+    const du = c.arr('dist', u);
+    const dv = c.arr('dist', v);
+    const w = c.arr2('graph', u, v);
+    if (u === undefined || v === undefined || du === undefined || !w || w === '0' || c.arr('visited', v) === '1' || c.arr('visited', v) === 'true') return null;
+    const via = Number(du) + Number(w);
+    const old = /^(2147483647|9223372036854775807|∞|inf|Infinity)$/.test(dv ?? '') ? '∞' : dv;
+    return c.outcome()
+      ? `Going through ${u} reaches ${v} with distance ${du} + ${w} = ${via}, shorter than ${old}. Update it.`
+      : `Going through ${u} would give ${v} distance ${via}, not shorter than ${old}. Keep ${old}.`;
+  },
+};
+
+const DP_MOMENTS: Record<string, CaptionFn> = {
+  'fibonacci-dp': (c) => {
+    const w = c.touched('write', 'dp');
+    const i = c.num('i');
+    if (!c.inFn('fib') || w.length !== 1 || i === undefined || i < 2) return null;
+    return `dp[${i}] = dp[${i - 1}] + dp[${i - 2}] = ${c.arr('dp', i - 1)} + ${c.arr('dp', i - 2)} = ${w[0].v}. Both were computed earlier, so nothing is worked out twice.`;
+  },
+  knapsack: (c) => {
+    const i = c.num('i');
+    const w = c.num('w');
+    if (!c.inFn('knapsack') || !c.wrote2('dp', i, w) || i === undefined || w === undefined) return null;
+    const v = c.arr2('dp', i, w);
+    if (i === 0 || w === 0) return `No items or no capacity: the best value is 0.`;
+    const wt = Number(c.arr('wt', i - 1));
+    const val = Number(c.arr('val', i - 1));
+    const skip = c.arr2('dp', i - 1, w);
+    if (wt > w) return `Item ${i} weighs ${wt}, more than the capacity ${w}, so it cannot go in: keep the value above, ${skip}.`;
+    const rest = c.arr2('dp', i - 1, w - wt);
+    return `Item ${i} (weight ${wt}, value ${val}) with capacity ${w}: skip it → ${skip}, or take it → ${val} + ${rest} = ${val + Number(rest)}. The better one is ${v}.`;
+  },
+  lcs: (c) => {
+    const i = c.num('i');
+    const j = c.num('j');
+    if (!c.inFn('lcs') || !c.wrote2('dp', i, j) || i === undefined || j === undefined) return null;
+    const v = c.arr2('dp', i, j);
+    if (i === 0 || j === 0) return 'One of the prefixes is empty, so the common part has length 0.';
+    const x = unq(c.str('X'))[i - 1];
+    const y = unq(c.str('Y'))[j - 1];
+    if (x === y) return `"${x}" = "${y}": a match! It extends the answer for both shorter prefixes: dp[${i - 1}][${j - 1}] + 1 = ${v}.`;
+    return `"${x}" ≠ "${y}": no match, so take the better of above (${c.arr2('dp', i - 1, j)}) and left (${c.arr2('dp', i, j - 1)}) → ${v}.`;
+  },
+  'coin-change-dp': (c) => {
+    const a = c.num('a');
+    const w = c.touched('write', 'dp');
+    if (!c.inFn('minCoins') || a === undefined || w.length !== 1) return null;
+    if (w[0].v === '999') return `Amount ${a}: no way to make it is known yet (999 stands for "impossible").`;
+    const coin = c.arr('coins', c.num('i'));
+    return coin ? `Amount ${a}: use a ${coin} coin last. That is 1 coin + the best for ${a - Number(coin)} (${c.arr('dp', a - Number(coin))}) = ${w[0].v} coin${w[0].v === '1' ? '' : 's'}, fewer than before.` : null;
+  },
+  'floyd-warshall': (c) => {
+    const i = c.num('i');
+    const j = c.num('j');
+    const k = c.num('k');
+    if (!c.inFn('floydWarshall') || !c.wrote2('dist', i, j) || k === undefined) return null;
+    return `Shorter path found: ${i} → ${k} → ${j} costs ${c.arr2('dist', i, k)} + ${c.arr2('dist', k, j)} = ${c.arr2('dist', i, j)}.`;
+  },
+};
+Object.assign(MOMENTS, DP_MOMENTS);
+
+/** The idea behind this step of a built-in example, if it is one of the key moments. */
+export function momentFor(exampleId: string, step: Step, index = 0, info: RunInfo = {}): string | null {
+  const fn = MOMENTS[exampleId];
+  if (!fn) return null;
+  try {
+    const m = fn(makeCtx(step, index, info));
+    if (m) return m;
+    // a swap done inside a small swap() helper belongs to the function that called it
+    const top = step.frames[step.frames.length - 1];
+    if (top && /swap/i.test(top.name) && step.frames.length > 1) return fn(makeCtx({ ...step, frames: step.frames.slice(0, -1) }, index, info));
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Chapters: the parts of an algorithm ("Pass 2 of 5", "Merge [0..2]") that the timeline is split into.
+ * Steps where the label is null belong to the chapter before them.
+ */
+const CHAPTERS: Record<string, CaptionFn> = {
+  'bubble-sort': (c) => (c.inFn('bubbleSort') && c.num('i') !== undefined ? `Pass ${c.num('i')! + 1} of ${(c.num('n') ?? 6) - 1}` : null),
+  'selection-sort': (c) => (c.inFn('selectionSort') && c.num('i') !== undefined ? `Pass ${c.num('i')! + 1}` : null),
+  'insertion-sort': (c) => (c.inFn('insertionSort') && c.num('i') !== undefined ? `Insert arr[${c.num('i')}]` : null),
+  'merge-sort': (c) => {
+    const l = c.num('left');
+    const r = c.num('right');
+    if (c.inFn('merge') && l !== undefined && r !== undefined) return `Merge [${l}..${r}]`;
+    if (c.inFn('mergeSort') && l !== undefined && r !== undefined && l < r) return `Split [${l}..${r}]`;
+    return null;
+  },
+  'quick-sort': (c) => (c.inFn('partition') && c.num('low') !== undefined ? `Partition [${c.num('low')}..${c.num('high')}]` : null),
+  'heap-sort': (c) => {
+    if (c.info.extractFrom === undefined || c.index < c.info.extractFrom) return c.inFn('main') ? null : 'Build the heap';
+    const i = c.num('i');
+    if (c.inFn('heapSort') && i !== undefined && i > 0) return `Move the largest to arr[${i}]`;
+    return null;
+  },
+  'counting-sort': (c) => {
+    if (!c.inFn('countingSort')) return null;
+    if (c.num('k') !== undefined) return 'Write back';
+    if (c.step.frames.at(-1)?.vars.some(([n]) => n === 'count')) return 'Count';
+    return 'Find the largest';
+  },
+  'binary-search': (c) => (c.inFn('binarySearch') && c.num('low') !== undefined && c.num('high') !== undefined ? `Search [${c.num('low')}..${c.num('high')}]` : null),
+  'string-matching': (c) => (c.inFn('search') && c.num('i') !== undefined ? `Try index ${c.num('i')}` : null),
+  'tree-traversals': (c) => {
+    for (const [fn, label] of [['preorder', 'Preorder'], ['inorder', 'Inorder'], ['postorder', 'Postorder'], ['levelOrder', 'Level order']] as const) {
+      if (c.step.frames.some((f) => norm(f.name).replace(/^.*\./, '') === norm(fn))) return label;
+    }
+    return null;
+  },
+  'growth-rates': (c) => {
+    const n = c.num('n');
+    for (const fn of ['constant', 'logarithmic', 'linear', 'quadratic']) if (c.inFn(fn)) return `n = ${n}: ${fn}`;
+    return null;
+  },
+  'n-queens': (c) => (c.inFn('solve') && c.num('row') !== undefined ? `Row ${c.num('row')}` : null),
+  dijkstra: (c) => (c.inFn('dijkstra') && c.num('u') !== undefined ? `Vertex ${c.num('u')}` : null),
+  'prim-mst': (c) => (c.inFn('prim') && c.num('u') !== undefined ? `Add vertex ${c.num('u')}` : null),
+  bfs: (c) => (c.inFn('bfs') && c.num('node') !== undefined ? `Visit ${c.num('node')}` : null),
+  dfs: (c) => (c.inFn('dfs') && c.num('node') !== undefined ? `Visit ${c.num('node')}` : null),
+  'topological-sort': (c) => {
+    if (!c.inFn('topologicalSort')) return null;
+    if (c.num('node') !== undefined) return `Output ${c.num('node')}`;
+    // once the queue exists we are past counting; between two outputs keep the current part
+    return c.step.frames.at(-1)?.vars.some(([n]) => n === 'queue' || n === 'q') ? null : 'Count indegrees';
+  },
+  'floyd-warshall': (c) => (c.inFn('floydWarshall') && c.num('k') !== undefined ? `Through vertex ${c.num('k')}` : null),
+  knapsack: (c) => (c.inFn('knapsack') && c.num('i') !== undefined ? `Item ${c.num('i')}` : null),
+  lcs: (c) => (c.inFn('lcs') && c.num('i') !== undefined ? `Row ${c.num('i')}` : null),
+  'coin-change-dp': (c) => (c.inFn('minCoins') && c.num('a') !== undefined ? `Amount ${c.num('a')}` : null),
+  'kruskal-mst': (c) => (c.inFn('kruskal') && c.num('i') !== undefined ? `Edge ${c.num('i')}` : null),
+  'activity-selection': (c) => (c.inFn('selectActivities') && c.arr('start', c.num('i')) !== undefined ? `Activity ${c.num('i')}` : null),
+  'coin-change': (c) => {
+    const coin = c.inFn('coinChange') ? c.arr('coins', c.num('i')) : undefined;
+    return coin ? `Coin ${coin}` : null;
+  },
+  // only at the loop check: in between, a is already updated and b not yet
+  gcd: (c) => (c.inFn('gcd') && c.step.kind === 'check' && c.num('b') ? `${c.num('a')} ÷ ${c.num('b')}` : null),
+  'infix-to-postfix': (c) => {
+    const ch = unq(c.str('c'));
+    return c.inFn('toPostfix') && ch ? `Read ${ch}` : null;
+  },
+  'balanced-parentheses': (c) => {
+    const ch = unq(c.str('c', 'ch'));
+    return ch && /[()[\]{}]/.test(ch) ? `Read ${ch}` : null;
+  },
+  'subset-sum': (c) => (c.num('mask') !== undefined ? `Subset #${c.num('mask')! + 1}` : null),
+  'fractional-knapsack': (c) => (c.inFn('knapsack') && c.num('i') !== undefined ? `Item ${c.num('i')}` : null),
+  permutations: (c) => (c.inFn('permute') && c.num('start') !== undefined ? `Fix position ${c.num('start')}` : null),
+};
+
+/** The chapter label of a step of a built-in example (null: same chapter as before). */
+export function chapterFor(exampleId: string, step: Step, index = 0, info: RunInfo = {}): string | null {
+  return fromTable(CHAPTERS, exampleId, step, index, info);
+}
+
+export function hasChapters(exampleId: string): boolean {
+  return exampleId in CHAPTERS;
+}
+
+/** recursive examples: coming back to a part that already ran is not a new part */
+export function chapterOnce(exampleId: string): boolean {
+  return ['merge-sort', 'dfs', 'permutations'].includes(exampleId);
 }

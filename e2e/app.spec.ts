@@ -149,10 +149,11 @@ test('predict mode asks before each comparison and checks the answer', async ({ 
   for (let i = 0; i < 10 && !(await page.locator('.step-card.quiz').count()); i++) {
     await page.getByRole('button', { name: 'Next step' }).click();
   }
-  await expect(page.locator('.step-card.quiz .step-say')).toHaveText('Is arr[0] = 5 greater than arr[1] = 1?');
+  await expect(page.locator('.step-card.quiz .step-say')).toHaveText('Compare the neighbors 5 and 1: is 5 bigger?');
   await page.keyboard.press('y');
   await expect(page.locator('.quiz-verdict')).toHaveText('✓ Correct!');
-  await expect(page.locator('.step-say')).toContainText('Yes, so the code inside the if runs');
+  await expect(page.locator('.step-say')).toContainText('Yes, they are in the wrong order, so they swap');
+  await expect(page.locator('.step-say-code')).toContainText('Yes, so the code inside the if runs');
   // the next comparison asks again; a wrong answer is explained
   for (let i = 0; i < 10 && !(await page.locator('.step-card.quiz').count()); i++) {
     await page.getByRole('button', { name: 'Next step' }).click();

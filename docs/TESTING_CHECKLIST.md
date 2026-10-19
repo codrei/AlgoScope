@@ -58,9 +58,13 @@ That's how we find unsupported features before the professor does.
 
 1. **The problem (30 s):** algorithms are hard to picture from code alone. AlgoScope runs the code and shows each step.
 2. **Bubble Sort in C++ (1 min):** Run, then pause and step: compare, swap, the gold line, the green locked cells.
+   Point at the parts bar (*Pass 2 of 5*) and let it finish: the cells bounce and the summary says why it is O(n²).
+2b. **Insertion Sort (30 s):** step through one round: the `key` lifts out, bigger values shift into the gap,
+   the key drops in. Read the big sentence aloud.
 3. **Same algorithm, other language (30 s):** switch to Python or Java and Run. The engine supports C, C++, Java, C# and Python.
 4. **Data structures (1 min):** Linked List: stop during `reverse` and point at prev / cur / next. Then BST.
-5. **Recursion and DP (1 min):** recursive Fibonacci (recursion tree, 15 calls), then Fibonacci DP table.
+5. **Recursion and DP (1 min):** recursive Fibonacci (recursion tree, 15 calls), then Fibonacci DP table and
+   Knapsack: the dashed cells show what each new value was built from.
 6. **Predict (30 s):** turn on Predict, let the audience guess one comparison, answer with Y / N.
 7. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
    comparing all sorts.

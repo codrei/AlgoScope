@@ -3,14 +3,16 @@ import { EditorPane } from './components/EditorPane';
 import { ComplexityLab } from './components/ComplexityLab';
 import { LANGS } from './components/EditorPane';
 import { HelpDialog } from './components/HelpDialog';
-import { Playback } from './components/Playback';
+import { ChapterBar, Playback } from './components/Playback';
 import { TopBar } from './components/TopBar';
 import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visualizer';
 import { configureEngine, preload, runCode, type Trace } from './engine';
 import type { Lang } from './engine/ir';
 import { EXAMPLES, type Example } from './examples';
-import { buildCallTree, computeImportance, computeLocks, keySteps, type CallNode, type LockInfo } from './lib/analysis';
-import { captionFor } from './lib/captions';
+import { buildCallTree, computeGaps, computeImportance, computeLocks, keySteps, type CallNode, type LockInfo } from './lib/analysis';
+import { captionFor, momentFor, runInfo } from './lib/captions';
+import { chapterPositions, chaptersFor } from './lib/chapters';
+import { labKind } from './lib/complexity';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -172,6 +174,7 @@ export default function App() {
   // In "key steps" mode playback only stops on steps that matter (compares, swaps,
   // changes, calls...). `view` lists the trace indexes the controls move through.
   const keyIdx = useMemo(() => (trace ? keySteps(trace) : []), [trace]);
+  const gaps = useMemo(() => (trace ? computeGaps(trace) : []), [trace]);
   const view = useMemo(
     () => (!trace ? [] : keyOnly && keyIdx.length > 1 ? keyIdx : trace.steps.map((_, i) => i)),
     [trace, keyOnly, keyIdx],
@@ -182,6 +185,12 @@ export default function App() {
     return p;
   }, [view, stepIndex]);
   const total = view.length;
+
+  // chapters: the parts of the algorithm (Pass 2 of 5, Merge [0..2], push(10)...)
+  const exampleRun = !!trace && traceCode.trim() === exampleCode(example, lang).trim();
+  const info = useMemo(() => (trace && exampleRun ? runInfo(example.id, trace.steps) : {}), [trace, exampleRun, example.id]);
+  const chapters = useMemo(() => (trace ? chaptersFor(trace, exampleRun ? example.id : null, info) : []), [trace, exampleRun, example.id, info]);
+  const chPos = useMemo(() => chapterPositions(chapters, view), [chapters, view]);
 
   // Predict mode: moving forward onto a comparison asks the class first.
   const isQuestion = useCallback((i: number) => {
@@ -229,8 +238,21 @@ export default function App() {
   // keyboard shortcuts (ignored while typing in the editor or a field)
   const answer = useCallback((a: 'Yes' | 'No') => setQuiz((q) => (q ? { ...q, answer: a } : q)), []);
   const quizOpen = !!quiz && quiz.step === stepIndex && !quiz.answer;
-  const keyRef = useRef({ goto, togglePlay, pos, total, answer, quizOpen });
-  keyRef.current = { goto, togglePlay, pos, total, answer, quizOpen };
+  const jumpChapter = useCallback(
+    (dir: 1 | -1) => {
+      if (!chPos.length) return;
+      let cur = -1;
+      chPos.forEach((c, k) => {
+        if (c.pos <= pos) cur = k;
+      });
+      // back: to the start of this part, or the part before if already there
+      const target = dir > 0 ? chPos[cur + 1]?.pos : cur >= 0 && chPos[cur].pos < pos ? chPos[cur].pos : chPos[Math.max(0, cur - 1)]?.pos;
+      if (target !== undefined) goto(target);
+    },
+    [chPos, pos, goto],
+  );
+  const keyRef = useRef({ goto, togglePlay, pos, total, answer, quizOpen, jumpChapter });
+  keyRef.current = { goto, togglePlay, pos, total, answer, quizOpen, jumpChapter };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -248,6 +270,9 @@ export default function App() {
         k.goto(k.pos - 1);
       } else if ((e.key === 'y' || e.key === 'n') && k.quizOpen) {
         k.answer(e.key === 'y' ? 'Yes' : 'No');
+      } else if (e.key === 'PageDown' || e.key === 'PageUp') {
+        e.preventDefault();
+        k.jumpChapter(e.key === 'PageDown' ? 1 : -1);
       } else if (e.key === 'Home') k.goto(0);
       else if (e.key === 'End') k.goto(k.total - 1);
     };
@@ -362,8 +387,9 @@ export default function App() {
                 that its condition can become false (is the counter changing?). Otherwise try a smaller input.
               </div>
             )}
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} mode={mode} onMode={setMode} code={traceCode || code} present={present} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={mode} onMode={setMode} code={traceCode || code} present={present} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />
           </div>
+          {chPos.length >= 2 && <ChapterBar chapters={chPos} pos={pos} total={total} onJump={goto} onStep={jumpChapter} />}
           <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />
         </section>
       </main>

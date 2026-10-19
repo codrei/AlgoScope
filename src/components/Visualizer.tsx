@@ -23,24 +23,36 @@ interface Props {
   position: number;
   viewTotal: number;
   caption: string | null;
+  /** the idea behind this step in words and values (built-in examples' key moments) */
+  moment?: string | null;
   quiz: { step: number; answer?: 'Yes' | 'No' } | null;
   onAnswer: (a: 'Yes' | 'No') => void;
   locks: Map<number, LockInfo>;
   calls: Map<number, CallNode>;
   importance: Map<number, number>;
+  /** cells that are conceptually empty after a copy (see computeGaps), for the current step */
+  gaps?: Map<number, number>;
   mode: ViewMode;
   onMode: (m: ViewMode) => void;
   code?: string;
   present: boolean;
+  /** the built-in example's Big-O (for the end-of-run summary), when the code is the example's own */
+  summary?: { title: string; time: string; topic: string } | null;
+  /** opens the Complexity Lab (sorting and searching examples) */
+  onLab?: () => void;
 }
 
-export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, quiz, onAnswer, locks, calls, importance, mode, onMode, code, present }: Props) {
+export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, moment, quiz, onAnswer, locks, calls, importance, gaps, mode, onMode, code, present, summary, onLab }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
   const beginner = mode === 'beginner';
   const short = useShortScreen();
-  const card = step && <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} quiz={quiz} onAnswer={onAnswer} locks={locks} />;
+  const card = step && (
+    <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} locks={locks}>
+      {isLast && step.kind === 'end' && <RunSummary trace={trace!} step={step} summary={summary ?? null} onLab={onLab} />}
+    </StepCard>
+  );
   return (
     <>
       <div className={`viz-header ${beginner ? 'compact' : ''}`}>
@@ -73,9 +85,9 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
       ) : present && code ? (
         <div className="present-grid">
           <div className="present-main">
-            <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
+            <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} gaps={gaps} isLast={isLast} beginner={beginner} />
             {!short && card}
-            <VarChips step={step} prev={prev} />
+            <VarChips step={step} prev={prev} focus={beginner} />
             <OutputBox trace={trace!} step={step} compact />
           </div>
           {/* on a short projector screen the explanation sits above the code, so the picture keeps the whole left side */}
@@ -86,11 +98,11 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
         </div>
       ) : (
         <>
-          <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} isLast={isLast} beginner={beginner} />
+          <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} gaps={gaps} isLast={isLast} beginner={beginner} />
           {card}
           {beginner ? (
             <>
-              <VarChips step={step} prev={prev} />
+              <VarChips step={step} prev={prev} focus />
               <OutputBox trace={trace!} step={step} compact />
             </>
           ) : (
@@ -145,10 +157,14 @@ function Stage(p: {
   locks: Map<number, LockInfo>;
   calls: Map<number, CallNode>;
   importance: Map<number, number>;
+  gaps?: Map<number, number>;
   isLast: boolean;
   beginner: boolean;
 }) {
-  const { step, prev, stepIndex, locks, calls, importance, isLast, beginner } = p;
+  const { step, prev, stepIndex, locks, calls, importance, gaps, isLast, beginner } = p;
+  // the value being moved around while there is a gap: insertion sort's key, a swap's temp
+  const top = step.frames[step.frames.length - 1];
+  const heldVar = top?.vars.find(([n, v]) => /^(key|temp|tmp|hold|held)$/i.test(n) && v.t === 'p');
   const { arrays: allArrays, maps, objects } = structuresFor(step);
   const is2D = (a: StructRef) =>
     a.item.kind === 'arr' && a.item.items.length > 0 && a.item.items.some((v) => v.t === 'r') &&
@@ -215,7 +231,9 @@ function Stage(p: {
     }
     // in heap code left/right are children, not a range: fade the sorted tail instead
     const range = asHeap ? { lo: 0, hi: heapSize - 1 } : a.range;
-    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner && arrays.length === 1} fieldMarkers={a.fieldMarkers} info={a.info} activeRange={range} />);
+    const gap = asHeap ? undefined : gaps?.get(a.id);
+    const held = gap !== undefined && heldVar && heldVar[1].t === 'p' ? { name: heldVar[0], value: heldVar[1].s } : undefined;
+    views.push(<ArrayView key={a.id} item={a.item} names={a.names} step={step} stepIndex={stepIndex} locked={locked} allLocked={allLocked} big={beginner && arrays.length === 1} fieldMarkers={a.fieldMarkers} info={a.info} activeRange={range} gapAt={gap} held={held} />);
     if (asHeap) views.push(<HeapTree key={`heap${a.id}`} item={a.item} step={step} size={heapSize} />);
   }
   if (objects.roots.length) views.push(<GraphView key="graph" step={step} prev={prev} roots={objects.roots} />);
@@ -319,10 +337,16 @@ function FitToView({ children }: { children: ReactNode }) {
 function Legend({ step, arrays, locks, stepIndex, isLast }: { step: Step; arrays: StructRef[]; locks: Map<number, LockInfo>; stepIndex: number; isLast: boolean }) {
   const roles = new Set<string>();
   let anyLocked = false;
+  let reads = 0;
   for (const a of arrays) {
     rolesFor(step, a.id).forEach((r) => roles.add(r));
+    reads += step.touches.filter((t) => t.id === a.id && t.role === 'read').length;
     if (a.item.kind === 'arr') {
-      for (const v of a.item.items) if (v.t === 'r') rolesFor(step, v.id).forEach((r) => roles.add(r));
+      for (const v of a.item.items) {
+        if (v.t !== 'r') continue;
+        rolesFor(step, v.id).forEach((r) => roles.add(r));
+        reads += step.touches.filter((t) => t.id === v.id && t.role === 'read').length;
+      }
     }
     if (lockedCells(locks.get(a.id), stepIndex, isLast).size) anyLocked = true;
   }
@@ -330,6 +354,7 @@ function Legend({ step, arrays, locks, stepIndex, isLast }: { step: Step; arrays
   if (roles.has('compare')) items.push({ cls: 'compare', label: 'being compared' });
   if (roles.has('swap')) items.push({ cls: 'swap', label: 'just swapped' });
   if (roles.has('write')) items.push({ cls: 'write', label: 'just changed' });
+  if (roles.has('write') && reads >= 2) items.push({ cls: 'source', label: 'used to compute it' });
   if (anyLocked) items.push({ cls: 'locked', label: 'in its final place' });
   if (!items.length) return null;
   return (
@@ -347,13 +372,18 @@ function StepCard(p: {
   position: number;
   total: number;
   caption: string | null;
+  moment: string | null;
   quiz: { step: number; answer?: 'Yes' | 'No' } | null;
   onAnswer: (a: 'Yes' | 'No') => void;
   locks: Map<number, LockInfo>;
+  children?: ReactNode;
 }) {
-  const { step, stepIndex, position, total, caption, quiz, onAnswer, locks } = p;
+  const { step, stepIndex, position, total, caption, moment, quiz, onAnswer, locks, children } = p;
   const [showCode, setShowCode] = useState(false);
   const m = /^(.*?\?) (Yes|No)\b/.exec(step.say);
+  // Predict asks the idea version of the question when there is one ("is 5 bigger than 1?")
+  const mq = moment ? /^(.*?\?) (Yes|No)\b/.exec(moment) : null;
+  const question = mq && m && mq[2] === m[2] ? mq[1] : m?.[1];
   if (quiz && m && !quiz.answer) {
     return (
       <div className="step-card quiz" role="status" aria-live="polite">
@@ -362,7 +392,7 @@ function StepCard(p: {
           <span className="step-num">Step {position + 1} of {total}</span>
         </div>
         {caption && <p className="step-caption">{caption}</p>}
-        <p className="step-say">{m[1]}</p>
+        <p className="step-say">{question}</p>
         <div className="quiz-buttons">
           <button className="quiz-btn" onClick={() => onAnswer('Yes')}>Yes <kbd>Y</kbd></button>
           <button className="quiz-btn" onClick={() => onAnswer('No')}>No <kbd>N</kbd></button>
@@ -389,7 +419,14 @@ function StepCard(p: {
       {verdict && (
         <p className={`quiz-verdict ${verdict}`}>{verdict === 'right' ? '✓ Correct!' : `✗ Not this time: the answer is ${m![2]}.`}</p>
       )}
-      <p className="step-say">{step.say}</p>
+      {moment ? (
+        <>
+          <p className="step-say">{moment}</p>
+          <p className="step-say-code">{step.say}</p>
+        </>
+      ) : (
+        <p className="step-say">{step.say}</p>
+      )}
       {notes.length > 0 && step.kind !== 'end' && (
         <p className="step-lock">{notes.join(', ')} {notes.length > 1 ? 'are' : 'is'} now in the final sorted place.</p>
       )}
@@ -397,6 +434,52 @@ function StepCard(p: {
         {showCode ? <ChevronDown size={13} /> : <ChevronRight size={13} />} In code terms
       </button>
       {showCode && <p className="step-code">{step.text}</p>}
+      {children}
+    </div>
+  );
+}
+
+/** What the Big-O of an example means when the input doubles. */
+function growthSentence(time: string): string | null {
+  const t = time.replace(/\s+/g, '').toLowerCase();
+  if (/n!|n·n!/.test(t)) return 'one more item multiplies the work by about n. Even 15 items would take billions of steps.';
+  if (/2[ⁿ^]|2\^n/.test(t)) return 'one more item doubles the work. 30 items would already mean about a billion subsets.';
+  if (/[nv]³|\^3/.test(t)) return 'doubling the input makes it about 8 times as much work.';
+  if (/nlogn|elog/.test(t)) return 'doubling the input makes it a little more than twice the work.';
+  if (/[nv]²|\^2/.test(t)) return 'doubling the input makes it about 4 times as much work.';
+  if (/[·×*]/.test(t)) return 'the work grows with both sizes multiplied together.';
+  if (/log/.test(t)) return 'doubling the input adds only about one more step.';
+  if (/o\(1\)/.test(t)) return 'the work stays the same however big the input gets.';
+  if (/o\(([nv]|[nv]\+\w+|amount)\)/.test(t)) return 'doubling the input doubles the work.';
+  return null;
+}
+
+/** The end of a run: what it cost, and what that means for bigger inputs. */
+function RunSummary({ trace, step, summary, onLab }: { trace: Trace; step: Step; summary: { title: string; time: string; topic: string } | null; onLab?: () => void }) {
+  const c = step.counts;
+  const parts: string[] = [];
+  if (c.compares) parts.push(`${c.compares} comparison${c.compares === 1 ? '' : 's'}`);
+  if (c.swaps) parts.push(`${c.swaps} swap${c.swaps === 1 ? '' : 's'}`);
+  if (c.writes) parts.push(`${c.writes} array write${c.writes === 1 ? '' : 's'}`);
+  if (c.calls > 1) parts.push(`${c.calls} function calls`);
+  if (!parts.length) parts.push(`${trace.steps.length} steps`);
+  // sorting: the size of the array that was sorted, to connect the count with the formula
+  let n = 0;
+  if (summary?.topic === 'Sorting') {
+    for (const f of step.frames) for (const [, v] of f.vars) {
+      const h = v.t === 'r' ? step.heap[v.id] : undefined;
+      if (h?.kind === 'arr' && h.items.every((x) => x.t === 'p')) n = Math.max(n, h.items.length);
+    }
+  }
+  const tri = n > 1 && c.compares === (n * (n - 1)) / 2;
+  const growth = summary ? growthSentence(summary.time) : null;
+  return (
+    <div className="run-summary">
+      <p className="run-summary-head"><b>Finished.</b> {parts.join(' · ')}.</p>
+      {tri && <p>That is n(n−1)/2 = {n}·{n - 1}/2 comparisons for n = {n} values: every pair was compared once.</p>}
+      {summary && growth && <p>{summary.title} is <b>{summary.time}</b>: {growth}</p>}
+      {!summary && <p>Try a bigger input and watch how these numbers grow: that growth is what Big-O describes.</p>}
+      {onLab && <button className="run-summary-btn" onClick={onLab}>See it grow in the Complexity Lab →</button>}
     </div>
   );
 }
@@ -452,14 +535,28 @@ function VarBoard({ step, prev }: { step: Step; prev?: Step }) {
 }
 
 /** The current function's simple variables (numbers, text, pointers) as chips. */
-function VarChips({ step, prev }: { step: Step; prev?: Step }) {
+function VarChips({ step, prev, focus }: { step: Step; prev?: Step; focus?: boolean }) {
   const f = step.frames[step.frames.length - 1];
   if (!f) return null;
   const pf = prev?.frames.find((x) => x.fid === f.fid);
   const before = new Map(pf?.vars.map(([n, v]) => [n, JSON.stringify(v)]));
+  // Focus mode: an index already drawn as a marker under its array (i, j, low...) is not repeated,
+  // unless it points outside the array (j = -1), where no marker can show it
+  const onPicture = new Set<string>();
+  if (focus) {
+    for (const [arrName, idxNames] of Object.entries(f.indexVars ?? {})) {
+      const av = f.vars.find(([n]) => n === arrName)?.[1];
+      const h = av && av.t === 'r' ? step.heap[av.id] : undefined;
+      if (!h || h.kind !== 'arr') continue;
+      for (const n of idxNames) {
+        const v = f.vars.find(([x]) => x === n)?.[1];
+        if (v && v.t === 'p' && v.n !== undefined && Number.isInteger(v.n) && v.n >= 0 && v.n < h.items.length) onPicture.add(n);
+      }
+    }
+  }
   const chips = f.vars
     .map(([n, v]) => ({ n, text: scalarText(step, v), changed: !!pf && before.get(n) !== JSON.stringify(v) }))
-    .filter((c) => c.text !== null && c.n !== 'this' && c.n !== 'self');
+    .filter((c) => c.text !== null && c.n !== 'this' && c.n !== 'self' && !onPicture.has(c.n));
   if (!chips.length) return null;
   return (
     <div className="var-chips" aria-label="Variables">

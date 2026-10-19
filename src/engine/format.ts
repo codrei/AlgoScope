@@ -320,8 +320,9 @@ export function display(v: Val, lang: Lang): string {
   if (v instanceof Chr) return `'${v.c === 0 ? '\\0' : v.c === 10 ? '\\n' : String.fromCharCode(v.c)}'`;
   if (typeof v === 'boolean') return lang === 'python' ? (v ? 'True' : 'False') : String(v);
   if (v instanceof Flt) {
+    // pictures and explanations show float('inf') as ∞ in every language (printing still says inf)
+    if (v.v === Infinity || v.v === -Infinity) return v.v > 0 ? '∞' : '-∞';
     if (lang === 'python') return pyFloat(v.v);
-    if (!Number.isFinite(v.v)) return v.v > 0 ? '∞' : '-∞';
     const s = Number.isInteger(v.v) ? v.v.toFixed(1) : String(Number(v.v.toPrecision(6)));
     return s;
   }

@@ -328,6 +328,47 @@ const KEY_KINDS = new Set(['start', 'end', 'error', 'call', 'return', 'print', '
  * nodes, pointers moving, new data, calls/returns and output. Loop bookkeeping
  * (i++, condition checks, temp variables) is skipped.
  */
+/**
+ * Gaps: when a value is copied to another cell of the same array (insertion sort's shift
+ * arr[j + 1] = arr[j]), the cell it came from is conceptually empty until something is written
+ * into it. Drawing it as a gap avoids the confusing duplicate (1 5 5 2). For every step: array id → gap index.
+ */
+export function computeGaps(trace: Trace): (Map<number, number> | undefined)[] {
+  const out: (Map<number, number> | undefined)[] = [];
+  let gaps = new Map<number, { idx: number; depth: number }>();
+  trace.steps.forEach((st, i) => {
+    const next = new Map(gaps);
+    // a gap belongs to the function that made it
+    for (const [id, g] of next) if (st.frames.length < g.depth) next.delete(id);
+    // key = arr[i] / temp = arr[j]: the value is lifted out of the array, leaving a gap
+    const lift = /^(key|temp|tmp|hold|held) = /i.test(st.text) ? st.touches.filter((t) => t.role === 'read') : [];
+    if (lift.length === 1 && !st.touches.some((t) => t.role !== 'read')) next.set(lift[0].id, { idx: lift[0].idx, depth: st.frames.length });
+    const ids = new Set(lift.length ? [] : st.touches.map((t) => t.id));
+    for (const id of ids) {
+      const ts = st.touches.filter((t) => t.id === id);
+      const writes = ts.filter((t) => t.role === 'write');
+      const reads = ts.filter((t) => t.role === 'read');
+      if (ts.some((t) => t.role === 'swap') || st.kind === 'swap') {
+        next.delete(id);
+        continue;
+      }
+      if (writes.length !== 1) continue;
+      const d = writes[0].idx;
+      if (next.get(id)?.idx === d) next.delete(id);
+      const h = st.heap[id];
+      if (reads.length === 1 && reads[0].idx !== d && h?.kind === 'arr') {
+        const a = h.items[reads[0].idx];
+        const b = h.items[d];
+        // a pure copy: the value written is the value read
+        if (a && b && a.t === 'p' && b.t === 'p' && a.s === b.s) next.set(id, { idx: reads[0].idx, depth: st.frames.length });
+      }
+    }
+    gaps = next;
+    out[i] = gaps.size ? new Map([...gaps].map(([id, g]) => [id, g.idx])) : undefined;
+  });
+  return out;
+}
+
 export function keySteps(trace: Trace): number[] {
   const out: number[] = [];
   trace.steps.forEach((s, i) => {

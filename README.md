@@ -12,7 +12,11 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 
 - Code editor with syntax highlighting for all five languages
 - Step-by-step playback (play, pause, step back/forward, speed control, slider)
-- Narration of every step: `COMPARE arr[0] (5) > arr[1] (1) → true`, `SWAP arr[0] ↔ arr[1]`, `CALL fib(3)`...
+- Explains the idea of each key moment with real values ("Is 8 bigger than the key 4? Yes, so 8 shifts right",
+  "dp[7] = dp[6] + dp[5] = 8 + 5 = 13"), with the code-level version underneath
+- A parts bar that splits each run into the parts of the algorithm (Pass 2 of 5, Merge [0..2], push(10)) to jump between
+- Values that move: copies slide, the cell left behind is drawn as a gap, Insertion Sort's key floats above it;
+  DP cells show which cells they were built from; each run ends with a summary that ties the counts to the Big-O
 - Array cells light up when compared, swapped or changed; elements turn green once they are locked in place
 - Counters for comparisons, swaps and function calls, to compare algorithms' complexity in practice
 - Complexity Lab: reruns an algorithm on growing inputs, plots the counts against its Big-O, and marks which

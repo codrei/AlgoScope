@@ -34,6 +34,14 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Focus</b> (the default) shows the main picture, what the algorithm is doing (blue line), the explanation and the current variables.</li>
           <li><b>Full detail</b> adds the Big-O badges, counters (comparisons, swaps, calls), the full call stack, helper arrays and the recursion tree.</li>
         </ul>
+        <h3>Following along</h3>
+        <ul>
+          <li>The <b>parts bar</b> above the controls splits the run into the parts of the algorithm (Pass 2 of 5, Merge [0..2], push(10)…). Click a part to jump there, or use <kbd>Page Up</kbd> / <kbd>Page Down</kbd>.</li>
+          <li>In the built-in examples the big sentence explains the idea of each key moment with the real values (“Is 8 bigger than the key 4? Yes, so 8 shifts right”). The same step in code terms is the small grey line under it.</li>
+          <li>Values move: a copied value slides to its new cell, and the cell it left is drawn as a dashed <b>gap</b>. Insertion Sort’s <code>key</code> floats above the gap until it is dropped in.</li>
+          <li>In DP tables the cells a new value was <b>built from</b> get a dashed outline.</li>
+          <li>The last step sums up the run (comparisons, swaps…) and what the Big-O means when the input doubles.</li>
+        </ul>
         <h3>Key steps and Every line</h3>
         <ul>
           <li><b>Key steps</b> (the default) stops only where something happens: compares, swaps, changes, pointers moving, calls and output. Bubble Sort takes 28 key steps instead of 84 lines.</li>
