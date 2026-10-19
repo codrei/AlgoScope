@@ -1,0 +1,7 @@
+   the: 3
+ brown: 1
+   dog: 1
+[('brown', 5), ('jumps', 5), ('quick', 5)]
+1 0 0
+0 2 0
+0 0 3

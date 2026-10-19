@@ -1328,6 +1328,15 @@ function specialMethod(I: Interp, o: Special, name: string, args: Expr[]): R {
   return NF;
 }
 
+/** a Java expression whose value is an Integer object rather than an int */
+function isBoxedInteger(I: Interp, e: Expr | undefined): boolean {
+  if (!e) return false;
+  if (e.k === 'call' && e.callee.k === 'member' && e.callee.obj.k === 'name' && e.callee.obj.name === 'Integer' && e.callee.name === 'valueOf') return true;
+  if (e.k === 'cast') return e.ty.base === 'Integer';
+  if (e.k === 'name') return I.lookup(e.name)?.ty?.base === 'Integer';
+  return false;
+}
+
 function arrMethod(I: Interp, a: Arr, name: string, args: Expr[]): R {
   const v = () => vals(I, args);
   const L = I.lang;
@@ -1488,8 +1497,9 @@ function arrMethod(I: Interp, a: Arr, name: string, args: Expr[]): R {
     }
     case 'remove': case 'Remove': {
       const x = v()[0];
-      if (L === 'java' && typeof x === 'number' && a.elemTy?.base !== 'Integer') return removeAt(I, a, x);
-      if (L === 'java' && typeof x === 'number') return removeAt(I, a, x);
+      // Java: list.remove(2) removes index 2, but list.remove(Integer.valueOf(2)) / remove((Integer) x)
+      // / remove(boxedVar) removes the value 2
+      if (L === 'java' && typeof x === 'number' && !isBoxedInteger(I, args[0])) return removeAt(I, a, x);
       const i = a.items.findIndex((y) => valEq(x, y));
       if (i < 0) {
         if (L === 'python') throw I.err('list.remove(x): x not in list');

@@ -39,6 +39,18 @@ npm run e2e      # click-through interface tests (Playwright)
 npm run build    # production build in dist/
 ```
 
+## Hosting your own copy
+
+AlgoScope is a static website: no server code, no database, no accounts. Any of these works:
+
+- **GitHub Pages (what we use):** fork this repository, then in the fork open *Settings → Pages* and set
+  *Source* to **GitHub Actions**. The workflow in `.github/workflows/deploy.yml` tests, builds and publishes it at
+  `https://<your-username>.github.io/<repository-name>/` on every push.
+- **Any web server** (a school server, Netlify, a shared folder): run `npm run build` and copy the contents of
+  `dist/` anywhere. The build uses relative paths, so it also works inside a subfolder.
+- **Without internet:** after one visit (keep the page open for about a minute) the browser keeps a copy of
+  the app and all five language parsers, so it opens and runs offline.
+
 ## How it works
 
 1. The code is parsed with [tree-sitter](https://tree-sitter.github.io/) grammars for C/C++, Java, C# and Python.

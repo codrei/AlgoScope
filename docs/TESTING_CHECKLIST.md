@@ -5,8 +5,9 @@ after an update).
 
 ## Before class (5 minutes, on the classroom computer)
 
-- [ ] Open the site and run one example in **each** language (C, C++, Java, C#, Python). This downloads each
-      language's parser once; after that AlgoScope works even if the Wi-Fi drops.
+- [ ] Open the site and leave it open for about a minute: it downloads all five language parsers in the
+      background. After that AlgoScope works even if the Wi-Fi drops. (To double-check, run one example in each
+      language tab.)
 - [ ] Connect the projector and press **Present**. At 1280×720 the explanation sits above the code on the right.
 - [ ] Try **+** once or twice if the back row needs bigger text, and the moon button if the projector washes out colors.
 - [ ] Keep these links ready (they open straight into a run):

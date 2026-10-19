@@ -350,7 +350,14 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
       }
       case 'for_range_loop': {
         const t = typeOf(f(n, 'type'));
-        const d = unwrap(f(n, 'declarator'));
+        const dn = f(n, 'declarator');
+        // C++17: for (auto [name, qty] : v)
+        const sb = dn && (dn.type === 'structured_binding_declarator' ? dn : kids(dn).find((k) => k.type === 'structured_binding_declarator'));
+        if (sb) {
+          const items = kids(sb).filter((k) => k.type === 'identifier').map((k) => ({ k: 'name', ln, name: k.text }) as Expr);
+          return [{ k: 'foreach', ln, target: { k: 'list', ln, kind: 'tuple', items }, ty: t, iter: expr(f(n, 'right')!), body: bodyOf(f(n, 'body')) }];
+        }
+        const d = unwrap(dn);
         return [{
           k: 'foreach', ln, target: { k: 'name', ln, name: d.name }, ty: withDecl(t, d), iter: expr(f(n, 'right')!),
           body: bodyOf(f(n, 'body')),
@@ -470,7 +477,16 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
     const ln = lineOf(n);
     const base = typeOf(declTypeNode(n));
     const decls: VarDeclItem[] = [];
+    const out: Stmt[] = [];
     for (const dn of fields(n, 'declarator')) {
+      // C++17: auto [a, b] = p;  declare a and b, then unpack
+      const sb = dn.type === 'init_declarator' ? kids(dn).find((k) => k.type === 'structured_binding_declarator') : undefined;
+      if (sb) {
+        const names = kids(sb).filter((k) => k.type === 'identifier').map((k) => k.text);
+        out.push({ k: 'vardecl', ln, ty: base, decls: names.map((name) => ({ name })) });
+        out.push({ k: 'expr', ln, e: { k: 'assign', ln, op: '=', target: { k: 'list', ln, kind: 'tuple', items: names.map((name) => ({ k: 'name', ln, name }) as Expr) }, value: expr(f(dn, 'value')!) } });
+        continue;
+      }
       const d = unwrap(dn);
       if (d.params) {
         // inside a function, "vector<int> L(n1);" is a constructor call, not a prototype
@@ -495,9 +511,9 @@ export function lowerCFamily(root: Node, lang: Lang, fix?: { source: string; swa
       }
       decls.push(item);
     }
-    if (!decls.length) return [];
+    if (!decls.length) return out;
     // per-declarator pointer levels are kept on each item; the shared type is the base
-    return [{ k: 'vardecl', ln, ty: base, decls }];
+    return [...out, { k: 'vardecl', ln, ty: base, decls }];
   }
 
   // ---------- expressions ----------

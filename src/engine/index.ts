@@ -30,7 +30,9 @@ export interface EngineConfig {
 
 let config: EngineConfig | null = null;
 let initPromise: Promise<void> | null = null;
-const languages = new Map<string, Language>();
+// the download in progress or done, per grammar: a Run clicked while the grammar is still
+// preloading waits for the same download instead of starting another one
+const languages = new Map<string, Promise<Language>>();
 
 export function configureEngine(c: EngineConfig) {
   config = c;
@@ -50,8 +52,10 @@ async function languageFor(lang: Lang): Promise<Language> {
   const g = GRAMMAR[lang];
   let l = languages.get(g);
   if (!l) {
-    l = await Language.load(config!.grammarPath(g));
+    l = Language.load(config!.grammarPath(g));
     languages.set(g, l);
+    // a failed download (offline, flaky Wi-Fi) can be retried on the next Run
+    l.catch(() => languages.delete(g));
   }
   return l;
 }

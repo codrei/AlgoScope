@@ -254,6 +254,9 @@ export class Interp {
   /** Text of an object printed with its own toString() / ToString() / __str__ / __repr__. */
   private printing = 0;
   objText(o: Obj, repr: boolean): string | undefined {
+    // System.out.println(sb) prints the text of a StringBuilder
+    if (o.cls === 'StringBuilder') return String(o.fields.get('value') ?? '');
+    if (o.cls === 'Type' && o.fields.has('Name')) return String(o.fields.get('Name'));
     if (o.fields.has('message') && (isExceptionName(o.cls) || this.isExceptionClass(o.cls)) && !this.findMethod(o.cls, this.lang === 'python' ? '__str__' : 'toString', 0)) {
       const msg = String(o.fields.get('message'));
       if (this.lang === 'python') return repr ? `${o.cls}(${JSON.stringify(msg)})` : msg;
@@ -876,7 +879,7 @@ export class Interp {
         }
         if (this.lang !== 'python' && s.target.k === 'list') {
           // foreach (var (to, w) in edges): declare each part
-          const parts = this.iterToArray(n.v);
+          const parts = this.unpackParts(n.v);
           s.target.items.forEach((t, k) => t.k === 'name' && this.declare(t.name, parts[k]));
         } else if (this.lang === 'python' || s.target.k !== 'name') this.assignTo(s.target, n.v);
         else if (s.ty?.ref && it instanceof Arr) {
@@ -943,6 +946,17 @@ export class Interp {
     }
     if (fr !== this.global) return this.global.scopes[0].get(name);
     return undefined;
+  }
+
+  /** the parts of a value being unpacked: a, b = ...; auto [k, v] = pair; foreach (var (u, w) in ...) */
+  unpackParts(v: Val): Val[] {
+    if (v instanceof Obj && this.lang !== 'python') {
+      if (v.cls === 'pair') return [v.fields.get('first'), v.fields.get('second')];
+      if (v.cls === 'KeyValuePair') return [v.fields.get('Key'), v.fields.get('Value')];
+      // C++ structured binding of a struct: its fields in order
+      return [...v.fields.values()];
+    }
+    return this.iterToArray(v);
   }
 
   /** the variable a Python nonlocal name refers to: the nearest enclosing function's */
@@ -1425,7 +1439,7 @@ export class Interp {
 
   assignTo(target: Expr, v: Val, src?: Expr): Val {
     if (target.k === 'list') {
-      const items = this.iterToArray(v);
+      const items = this.unpackParts(v);
       if (items.length !== target.items.length) throw this.err(`expected ${target.items.length} values to unpack, got ${items.length}`);
       const labels: string[] = [];
       target.items.forEach((t, i) => {
@@ -1476,9 +1490,17 @@ export class Interp {
     if (this.lang === 'csharp') return v instanceof Obj && this.classes.get(v.cls)?.def.isStruct ? this.cloneValue(v) : v;
     if (this.lang !== 'c' && this.lang !== 'cpp') return v;
     if (!t || t.ptr || t.ref || t.arr || t.base === 'auto') return v;
-    if (v instanceof Obj) return this.classes.has(t.base) ? this.cloneValue(v) : v;
+    if (v instanceof Obj) return this.classes.has(t.base) || (v.cls === 'pair' && t.base === 'pair') ? this.cloneValue(v) : v;
     if (this.lang === 'cpp' && (v instanceof MapV || v.kind !== 'array') && CPP_VALUE_CONTAINERS.has(t.base)) return this.cloneValue(v);
     return v;
+  }
+
+  /** what obj.GetType() / obj.getClass() returns: its class name as Name */
+  typeObj(cls: string): Obj {
+    const t = new Obj('Type');
+    t.fields.set('Name', cls);
+    t.fields.set('FullName', cls);
+    return t;
   }
 
   cloneValue(v: Val): Val {
@@ -1886,6 +1908,8 @@ export class Interp {
       const r = callFunction(this, name, e.args);
       if (r !== NF) return r as Val;
       if (isExceptionName(name)) return this.makeException(name, e.args.length ? this.ev(e.args[0]) : '');
+      // getClass() / GetType() inside a method means this.getClass()
+      if ((name === 'getClass' || name === 'GetType') && this.frame.self && !e.args.length) return this.typeObj(this.frame.self.cls);
       throw this.err(`function '${name}' is not defined`);
     }
     if (c.k === 'member') {
@@ -1926,12 +1950,7 @@ export class Interp {
       const r = callMethod(this, o, c.name, e.args, c.obj);
       if (r !== NF) return r as Val;
       // obj.GetType().Name (C#) / obj.getClass().getSimpleName() (Java)
-      if (o instanceof Obj && (c.name === 'GetType' || c.name === 'getClass') && !e.args.length) {
-        const t = new Obj('Type');
-        t.fields.set('Name', o.cls);
-        t.fields.set('FullName', o.cls);
-        return t;
-      }
+      if (o instanceof Obj && (c.name === 'GetType' || c.name === 'getClass') && !e.args.length) return this.typeObj(o.cls);
       if (o instanceof Obj && o.cls === 'Type' && ['getSimpleName', 'getName', 'ToString', 'toString'].includes(c.name)) return o.fields.get('Name') ?? null;
       const tn = typeName(o);
       throw this.err(`${/^[aeiou]/i.test(tn) ? 'an' : 'a'} ${tn} has no method '${c.name}'`);

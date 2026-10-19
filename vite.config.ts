@@ -4,7 +4,9 @@ import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/AlgoScope/',
+  // relative paths: the same build works at codrei.github.io/AlgoScope/, in a fork with another
+  // name, on a school web server or from any folder served by a simple static web server
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
