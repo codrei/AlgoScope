@@ -61,12 +61,21 @@ const P = {
   lab: params.get('lab') === '1',
 };
 
+function initialExample(): Example {
+  return EXAMPLES.find((e) => e.id === (P.example ?? load('as.example', ''))) ?? EXAMPLES.find((e) => e.id === 'bubble-sort') ?? EXAMPLES[0];
+}
+
+function initialLang(example: Example): Lang {
+  const l = P.lang ?? load<Lang>('as.lang', 'cpp');
+  const ok = LANG_IDS.includes(l) ? l : 'cpp';
+  // a single-language example (the Turbo C++ maze, the C structs) opens in its own language,
+  // even from a link without &lang= or after last using another language
+  return example.only && example.code[ok] === undefined ? example.only : ok;
+}
+
 export default function App() {
-  const [example, setExample] = useState<Example>(() => EXAMPLES.find((e) => e.id === (P.example ?? load('as.example', ''))) ?? EXAMPLES.find((e) => e.id === 'bubble-sort') ?? EXAMPLES[0]);
-  const [lang, setLang] = useState<Lang>(() => {
-    const l = P.lang ?? load<Lang>('as.lang', 'cpp');
-    return LANG_IDS.includes(l) ? l : 'cpp';
-  });
+  const [example, setExample] = useState<Example>(initialExample);
+  const [lang, setLang] = useState<Lang>(() => initialLang(example));
   const [codes, setCodes] = useState<Record<Lang, string>>(() => allCodes(example));
   const [stdin, setStdin] = useState(example.stdin ?? '');
   const [trace, setTrace] = useState<Trace | null>(null);

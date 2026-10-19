@@ -224,3 +224,12 @@ test('Complexity Lab names the real worst case of quick sort', async ({ page }) 
   await fresh(page, '?example=quick-sort&lang=cpp&lab=1');
   await expect(page.locator('.lab-insight')).toContainText('reversed order and already sorted', { timeout: 30000 });
 });
+
+test('a link to a one-language example opens in that language', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&lang=python');
+  await page.goto('./?example=maze-game&run=1');
+  await expect(page.getByRole('tab', { name: 'C++', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.step-say')).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(page.locator('.screen')).toContainText('Congrats');
+});
