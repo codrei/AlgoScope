@@ -64,7 +64,7 @@ test('the bottom bar steps, scrubs and opens the playback settings', async ({ pa
   await expect(page.locator('.m-count')).toHaveText(/^2 \/ /);
   await expect(page.locator('.m-chapter')).not.toBeEmpty();
   await page.getByRole('button', { name: 'Playback settings' }).tap();
-  await page.getByRole('tab', { name: 'Every line' }).tap();
+  await page.getByRole('radio', { name: 'Every line' }).tap();
   await page.getByRole('button', { name: 'Close' }).tap();
   const total = Number((await page.locator('.m-count').textContent())!.split('/')[1]);
   expect(total).toBeGreaterThan(40);

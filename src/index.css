@@ -72,6 +72,39 @@
   color-scheme: dark;
 }
 
+/* Settings → Colors → Color-blind friendly: colors chosen so compared, swapped, changed and locked
+   stay far apart under protanopia, deuteranopia and tritanopia (checked with the Machado 2009 simulation) */
+:root[data-palette='colorblind'] {
+  --compare: #2a78d6;
+  --compare-bg: #e3eeff;
+  --swap: #c04a00;
+  --swap-bg: #ffe6d6;
+  --write: #e0b400;
+  --locked: #1b1b3a;
+  --locked-bg: #1b1b3a;
+  --locked-text: #ffffff;
+}
+
+:root[data-theme='dark'][data-palette='colorblind'] {
+  --compare: #6cb6ff;
+  --compare-bg: #15335c;
+  --swap: #ff6b9a;
+  --swap-bg: #4a1730;
+  --write: #e6c200;
+  --locked: #ffffff;
+  --locked-bg: #e9e9f5;
+  --locked-text: #15163d;
+}
+
+/* Settings → Animations → Off */
+:root[data-motion='off'] *,
+:root[data-motion='off'] *::before,
+:root[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -529,7 +562,7 @@ input {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1px;
-  color: #fff;
+  color: var(--locked-text);
   background: var(--locked-bg);
   padding: 2px 8px;
   border-radius: 999px;
@@ -3028,5 +3061,276 @@ input[type='range'] {
     position: static;
     box-shadow: none;
     backdrop-filter: none;
+  }
+}
+
+/* ===================================================================== settings */
+.dialog.settings {
+  max-width: 600px;
+}
+
+.settings-body {
+  font-size: 14.5px;
+}
+
+.set-section {
+  margin-top: 6px;
+}
+
+.set-section h3 {
+  margin: 18px 0 2px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.set-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.set-section h3 + .set-row {
+  border-top: none;
+}
+
+.set-label {
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.set-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.set-seg button {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.set-seg button:hover:not(.active) {
+  background: color-mix(in srgb, var(--nu-blue) 8%, transparent);
+}
+
+.set-seg button.active {
+  background: var(--nu-blue);
+  color: #fff;
+}
+
+:root[data-theme='dark'] .set-seg button.active {
+  background: var(--nu-gold);
+  color: #24235e;
+}
+
+.set-hint {
+  margin: 6px 2px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.dialog .set-hint,
+.dialog .set-steps li {
+  color: var(--text-2);
+}
+
+.set-hint a {
+  color: var(--compare);
+}
+
+.set-legend {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 2px 0 6px;
+}
+
+.set-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.set-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.set-size-value {
+  min-width: 54px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-link {
+  margin-left: 6px;
+  border: none;
+  background: none;
+  color: var(--compare);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.set-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  padding: 0 20px;
+  min-height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: var(--nu-gold);
+  color: #24235e;
+  font-weight: 800;
+  font-size: 15.5px;
+  box-shadow: 0 2px 0 var(--nu-gold-deep);
+  cursor: pointer;
+}
+
+.set-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.set-ok svg {
+  color: #2b9348;
+  flex-shrink: 0;
+}
+
+.set-steps {
+  margin: 10px 0 4px;
+  padding-left: 22px;
+  line-height: 1.6;
+}
+
+.set-steps li + li {
+  margin-top: 4px;
+}
+
+.set-steps svg {
+  vertical-align: -2px;
+}
+
+.set-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.set-footer .set-hint {
+  margin: 0;
+}
+
+.set-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* laptops: the name on the left, the choices on the right */
+@media (min-width: 700px) {
+  .dialog.settings {
+    max-width: 660px;
+  }
+
+  .dialog.settings .set-row {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: 18px;
+    align-items: center;
+    padding: 10px 0;
+  }
+
+  .dialog.settings .set-label {
+    margin: 0;
+  }
+
+  .dialog.settings .set-row > .set-hint {
+    grid-column: 2;
+    margin-top: 5px;
+  }
+}
+
+/* the bottom panel on phones: finger-sized buttons */
+.m-sheet .settings-body {
+  padding-bottom: 8px;
+}
+
+.m-sheet .set-section h3 {
+  margin-top: 14px;
+}
+
+.m-sheet .set-seg button,
+.m-sheet .set-reset {
+  min-height: 44px;
+}
+
+.m-sheet .set-seg button {
+  font-size: 14.5px;
+}
+
+/* a bigger place to tap, without breaking the line */
+.m-sheet .set-hint a {
+  display: inline-block;
+  padding: 12px 0;
+  margin: -12px 0;
+}
+
+.m-sheet .set-install {
+  width: 100%;
+  justify-content: center;
+  min-height: 50px;
+}
+
+@media (pointer: coarse) {
+  .set-seg button {
+    min-height: 44px;
+  }
+
+  .set-step {
+    height: 44px;
+  }
+
+  .set-reset {
+    min-height: 44px;
   }
 }

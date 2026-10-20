@@ -1,6 +1,7 @@
-import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Search, Sun, TrendingUp, X } from 'lucide-react';
+import { BookOpen, ChevronDown, CircleHelp, Download, Monitor, Search, Settings, TrendingUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
+import { promptInstall, useInstall } from '../lib/install';
 import { PHONE_QUERY, useMediaQuery } from '../lib/useMedia';
 
 const LANG_LABEL = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' } as const;
@@ -25,12 +26,10 @@ interface Props {
   onExample: (e: Example) => void;
   present: boolean;
   onPresent: () => void;
-  dark: boolean;
-  onDark: () => void;
   onHelp: () => void;
   onLab: () => void;
-  onZoom: (d: number) => void;
-  /** touch layout (phones, upright tablets): no Present mode or text-size buttons there */
+  onSettings: () => void;
+  /** touch layout (phones, upright tablets): no Present mode there */
   compact?: boolean;
 }
 
@@ -39,6 +38,8 @@ export function TopBar(p: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   // phones: the menu is a full-screen panel with a search box
   const phone = useMediaQuery(PHONE_QUERY);
+  // Chrome and Edge on a computer: an Install button while the browser offers to install the app
+  const install = useInstall();
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
   const matches = (e: Example) => !q || `${e.title} ${e.topic} ${e.description}`.toLowerCase().includes(q);
@@ -118,13 +119,16 @@ export function TopBar(p: Props) {
         <TrendingUp size={16} /> <span className="label">Complexity</span>
       </button>
       <div className="topbar-spacer" />
-      {!p.compact && <button className="topbar-btn hide-sm" onClick={() => p.onZoom(-1)} title="Smaller text" aria-label="Smaller text"><Minus size={16} /></button>}
-      {!p.compact && <button className="topbar-btn hide-sm" onClick={() => p.onZoom(1)} title="Bigger text (for projectors)" aria-label="Bigger text"><Plus size={16} /></button>}
+      {!p.compact && install.canPrompt && !install.standalone && (
+        <button className="topbar-btn hide-sm" onClick={() => promptInstall()} title="Install AlgoScope as an app: its own window, works without internet">
+          <Download size={16} /> <span className="label">Install</span>
+        </button>
+      )}
       {!p.compact && (<button className={`topbar-btn hide-sm ${p.present ? 'active' : ''}`} onClick={p.onPresent} title="Present mode: big visualization with the code underneath">
         <Monitor size={16} /> <span className="label">Present</span>
       </button>)}
-      <button className="topbar-btn" onClick={p.onDark} title={p.dark ? 'Light theme' : 'Dark theme'} aria-label="Toggle theme">
-        {p.dark ? <Sun size={16} /> : <Moon size={16} />}
+      <button className="topbar-btn" onClick={p.onSettings} title="Settings: theme, text size, colors, playback, install as an app" aria-label="Settings">
+        <Settings size={16} /> <span className="label">Settings</span>
       </button>
       <button className="topbar-btn" onClick={p.onHelp} title="How to use AlgoScope" aria-label="Help">
         <CircleHelp size={16} /> <span className="label">Help</span>

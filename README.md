@@ -28,11 +28,14 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
 - Runs code as it appears on lecture slides (K&R C, Turbo C++ with `conio.h`, curly quotes, Python 2 print) and
   adds a `main()` for slides that show only a function
 - Console screen for Turbo C programs (`gotoxy`, `getch` with arrow keys)
-- Present mode for projectors (checked at 1080p, 768p, 720p and 1024×768), dark/light theme, adjustable text size
+- Present mode for projectors (checked at 1080p, 768p, 720p and 1024×768)
+- Settings in one place: light, dark or device theme, text size, color-blind friendly colors, animations on or off,
+  playback options, saved on the device
+- Installable as an app (home screen on phones, its own window on computers) that works without internet
 - A touch layout for phones and upright tablets: separate Code and Watch views, the picture never covered, one
   scrolling page, controls at the bottom (with swipe), full-screen examples with search
 - Clear messages for student mistakes (index out of bounds, null pointer, endless loop, missing indent...)
-- Runs fully in the browser, so no server and no installation are needed
+- Runs fully in the browser, so no server is needed and installing is optional
 
 ## Running locally
 

@@ -3,8 +3,9 @@ import { EditorPane } from './components/EditorPane';
 import { ComplexityLab } from './components/ComplexityLab';
 import { LANGS } from './components/EditorPane';
 import { HelpDialog } from './components/HelpDialog';
-import { MobileBar, PlaybackSettings } from './components/MobileBar';
+import { MobileBar } from './components/MobileBar';
 import { ChapterBar, Playback } from './components/Playback';
+import { DEFAULT_PREFS, SettingsPanel, ZOOM_MAX, ZOOM_MIN, type Palette, type Prefs, type Theme } from './components/SettingsPanel';
 import { TopBar } from './components/TopBar';
 import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visualizer';
 import { configureEngine, preload, runCode, type Trace } from './engine';
@@ -63,7 +64,16 @@ const P = {
   present: params.get('present') === '1',
   theme: params.get('theme'),
   lab: params.get('lab') === '1',
+  settings: params.get('settings') === '1',
 };
+
+const THEMES: Theme[] = ['light', 'dark', 'system'];
+function initialTheme(): Theme {
+  if (P.theme && THEMES.includes(P.theme as Theme)) return P.theme as Theme;
+  const t = load<Theme | null>('as.theme', null);
+  // before Settings there was only a dark / light switch
+  return t && THEMES.includes(t) ? t : load('as.dark', false) ? 'dark' : 'light';
+}
 
 function initialExample(): Example {
   return EXAMPLES.find((e) => e.id === (P.example ?? load('as.example', ''))) ?? EXAMPLES.find((e) => e.id === 'bubble-sort') ?? EXAMPLES[0];
@@ -92,7 +102,13 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(() => load('as.speed', 1));
   const [running, setRunning] = useState(false);
-  const [dark, setDark] = useState(() => (P.theme ? P.theme === 'dark' : load('as.dark', false)));
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const deviceDark = useMediaQuery('(prefers-color-scheme: dark)');
+  const dark = theme === 'dark' || (theme === 'system' && deviceDark);
+  const [palette, setPalette] = useState<Palette>(() => (load<Palette>('as.palette', 'standard') === 'colorblind' ? 'colorblind' : 'standard'));
+  const [motion, setMotion] = useState(() => load('as.motion', true));
+  const [autoplay, setAutoplay] = useState(() => load('as.autoplay', true));
+  const [settingsOpen, setSettingsOpen] = useState(P.settings);
   const [present, setPresent] = useState(P.present);
   const [help, setHelp] = useState(false);
   const [lab, setLab] = useState(P.lab);
@@ -103,7 +119,6 @@ export default function App() {
   // phones: separate Code and Watch views, controls at the bottom
   const phone = useMediaQuery(COMPACT_QUERY);
   const [mview, setMview] = useState<'code' | 'watch'>(() => (P.run || P.present ? 'watch' : 'code'));
-  const [settings, setSettings] = useState(false);
   const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
 
   const code = codes[lang];
@@ -114,8 +129,17 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    save('as.dark', dark);
   }, [dark]);
+  useEffect(() => save('as.theme', theme), [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.palette = palette;
+    save('as.palette', palette);
+  }, [palette]);
+  useEffect(() => {
+    document.documentElement.dataset.motion = motion ? 'on' : 'off';
+    save('as.motion', motion);
+  }, [motion]);
+  useEffect(() => save('as.autoplay', autoplay), [autoplay]);
   useEffect(() => save('as.lang', lang), [lang]);
   useEffect(() => save('as.speed', speed), [speed]);
   useEffect(() => save('as.zoom', zoom), [zoom]);
@@ -152,7 +176,7 @@ export default function App() {
         setPlaying(false);
       } else {
         setStepIndex(0);
-        setPlaying(r.trace!.steps.length > 1);
+        setPlaying(autoplay && r.trace!.steps.length > 1);
       }
     } catch (e) {
       setCompileError({ msg: `Could not run the code: ${e instanceof Error ? e.message : String(e)}`, line: 0 });
@@ -160,7 +184,7 @@ export default function App() {
     } finally {
       setRunning(false);
     }
-  }, [code, lang, stdin]);
+  }, [code, lang, stdin, autoplay]);
 
   // run again right after "Add a main() for me" put the new code in the editor
   useEffect(() => {
@@ -367,6 +391,16 @@ export default function App() {
   useEffect(() => {
     if (phone) document.querySelector('.main')?.scrollTo({ top: 0 });
   }, [mview, phone]);
+  const prefs: Prefs = { theme, zoom, palette, motion, mode, keyOnly, speed, predict, autoplay };
+  const setPref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
+    const set: { [P in keyof Prefs]: (v: Prefs[P]) => void } = {
+      theme: setTheme, zoom: setZoom, palette: setPalette, motion: setMotion, mode: setMode,
+      keyOnly: setKeyOnly, speed: setSpeed, predict: setPredict, autoplay: setAutoplay,
+    };
+    set[key](value);
+  };
+  const changeZoom = (d: number) => setZoom((z: number) => (d === 0 ? 1 : Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((z + d * 0.1) * 10) / 10))));
+  const resetPrefs = () => (Object.keys(DEFAULT_PREFS) as (keyof Prefs)[]).forEach((k) => setPref(k, DEFAULT_PREFS[k]));
   const errorLine = compileError?.line || (trace?.error && atEnd ? trace.error.line : 0) || null;
   const errorMsg = compileError?.msg ?? (trace?.error && atEnd ? trace.error.msg : null);
 
@@ -380,11 +414,9 @@ export default function App() {
           if (!present && !trace) run();
           setPresent(!present);
         }}
-        dark={dark}
-        onDark={() => setDark(!dark)}
         onHelp={() => setHelp(true)}
         onLab={() => setLab(true)}
-        onZoom={(d) => setZoom((z: number) => Math.min(1.8, Math.max(0.7, Math.round((z + d * 0.1) * 10) / 10)))}
+        onSettings={() => setSettingsOpen(true)}
         compact={phone}
       />
       {phone && (
@@ -450,10 +482,10 @@ export default function App() {
         </section>
       </main>
       {phone && (
-        <MobileBar view={mview} running={running} onRun={run} chapters={chPos} pos={pos} total={total} playing={playing} onIndex={goto} onPlay={togglePlay} onSettings={() => setSettings(true)} />
+        <MobileBar view={mview} running={running} onRun={run} chapters={chPos} pos={pos} total={total} playing={playing} onIndex={goto} onPlay={togglePlay} onSettings={() => setSettingsOpen(true)} />
       )}
-      {phone && settings && (
-        <PlaybackSettings onClose={() => setSettings(false)} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} speed={speed} onSpeed={setSpeed} />
+      {settingsOpen && (
+        <SettingsPanel prefs={prefs} onChange={setPref} onZoom={changeZoom} onReset={resetPrefs} onClose={() => setSettingsOpen(false)} touch={phone} />
       )}
       {help && <HelpDialog onClose={() => setHelp(false)} phone={phone} />}
       {lab && <ComplexityLab example={example} lang={lang} langLabel={LANGS.find((l) => l.id === lang)!.label} onClose={() => setLab(false)} />}

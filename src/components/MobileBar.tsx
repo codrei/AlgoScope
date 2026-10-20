@@ -1,8 +1,7 @@
 // Phones: the controls live in one bar at the bottom of the screen, where the thumb is.
 // Code view: a big Run button. Watch view: where we are, a scrubber, Back / Play / Next and settings.
-import { ChevronLeft, ChevronRight, Loader2, Pause, Play, Settings2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Pause, Play, Settings, X } from 'lucide-react';
 import { useEffect } from 'react';
-import { SPEEDS } from './Playback';
 
 interface BarProps {
   view: 'code' | 'watch';
@@ -60,7 +59,7 @@ export function MobileBar(p: BarProps) {
           <span>Next</span> <ChevronRight size={22} />
         </button>
         <button className="m-icon" onClick={p.onSettings} aria-label="Playback settings">
-          <Settings2 size={21} />
+          <Settings size={21} />
         </button>
       </div>
     </nav>
@@ -92,46 +91,5 @@ export function BottomSheet({ title, onClose, children }: SheetProps) {
         {children}
       </div>
     </div>
-  );
-}
-
-interface SettingsProps {
-  onClose: () => void;
-  keyOnly: boolean;
-  onKeyOnly: (v: boolean) => void;
-  predict: boolean;
-  onPredict: (v: boolean) => void;
-  speed: number;
-  onSpeed: (s: number) => void;
-}
-
-export function PlaybackSettings(p: SettingsProps) {
-  return (
-    <BottomSheet title="Playback" onClose={p.onClose}>
-      <div className="m-setting">
-        <div className="m-setting-label">Which steps to show</div>
-        <div className="m-seg" role="tablist">
-          <button role="tab" aria-selected={p.keyOnly} className={p.keyOnly ? 'active' : ''} onClick={() => p.onKeyOnly(true)}>Key steps</button>
-          <button role="tab" aria-selected={!p.keyOnly} className={!p.keyOnly ? 'active' : ''} onClick={() => p.onKeyOnly(false)}>Every line</button>
-        </div>
-        <p className="m-setting-hint">{p.keyOnly ? 'Stops only on compares, swaps, changes and calls.' : 'Stops on every line that runs.'}</p>
-      </div>
-      <div className="m-setting">
-        <div className="m-setting-label">Predict mode</div>
-        <div className="m-seg" role="tablist">
-          <button role="tab" aria-selected={!p.predict} className={!p.predict ? 'active' : ''} onClick={() => p.onPredict(false)}>Off</button>
-          <button role="tab" aria-selected={p.predict} className={p.predict ? 'active' : ''} onClick={() => p.onPredict(true)}>Ask me first</button>
-        </div>
-        <p className="m-setting-hint">Pauses before each comparison so you can guess the answer.</p>
-      </div>
-      <div className="m-setting">
-        <div className="m-setting-label">Speed</div>
-        <div className="m-seg speeds" role="tablist">
-          {SPEEDS.filter((s) => s !== 0.25 && s !== 8).map((s) => (
-            <button key={s} role="tab" aria-selected={p.speed === s} className={p.speed === s ? 'active' : ''} onClick={() => p.onSpeed(s)}>{s}×</button>
-          ))}
-        </div>
-      </div>
-    </BottomSheet>
   );
 }

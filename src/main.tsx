@@ -12,18 +12,31 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Offline support (production only): cache the app, then fetch every language's
-// grammar in the background so all five languages work without internet later.
+// Offline support (production only): the service worker answers from the cache when there is no
+// internet. A few seconds after the page opens, every file of the app (all five languages' grammars,
+// fonts, the editor) is saved, so the installed app also opens and runs offline. Files of older
+// versions are removed.
+const CACHE = 'algoscope-v1';
+async function saveForOffline(base: string) {
+  const list: string[] = await (await fetch(`${base}precache.json`, { cache: 'no-store' })).json();
+  const urls = list.map((f) => new URL(f, document.baseURI).href);
+  const cache = await caches.open(CACHE);
+  for (const url of urls) {
+    // the page itself is always refreshed; hashed files never change, so a saved copy is kept
+    if (!url.endsWith('/') && (await cache.match(url, { ignoreVary: true }))) continue;
+    await cache.add(url).catch(() => undefined);
+  }
+  const keep = new Set(urls);
+  for (const req of await cache.keys()) {
+    if (new URL(req.url).pathname.includes('/assets/') && !keep.has(req.url)) await cache.delete(req);
+  }
+  document.documentElement.dataset.offline = 'ready';
+}
+
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   const base = import.meta.env.BASE_URL;
   navigator.serviceWorker
     .register(`${base}sw.js`)
-    .then(() => {
-      window.setTimeout(() => {
-        for (const g of ['tree-sitter', 'tree-sitter-c', 'tree-sitter-cpp', 'tree-sitter-java', 'tree-sitter-c_sharp', 'tree-sitter-python']) {
-          fetch(`${base}grammars/${g}.wasm`).catch(() => undefined);
-        }
-      }, 8000);
-    })
+    .then(() => window.setTimeout(() => saveForOffline(base).catch(() => undefined), 8000))
     .catch(() => undefined);
 }

@@ -9,7 +9,7 @@ It is meant for teaching **Data Structures & Algorithms** and **Algorithms & Com
 
 | Area | What it shows |
 |---|---|
-| **Top bar** | Examples menu, Complexity Lab, text size (− / +), Present mode, light/dark theme, Help |
+| **Top bar** | Examples menu, Complexity Lab, Present mode, **Settings**, Help |
 | **Editor (left)** | Language tabs, Reset, **Run**. The line that just ran is highlighted in gold. |
 | **Visualization (right)** | Algorithm name and Big-O badges, the picture of the data, the step explanation, counters, call stack and output |
 | **Playback bar (bottom right)** | first / back / play-pause / forward / last, a slider to jump to any step, and the speed |
@@ -58,8 +58,8 @@ Phones (and tablets held upright) get a layout made for touch:
   and after it (tap it for the whole program). On a tablet a larger code panel shows about ten lines. Nothing is
   ever drawn on top of the picture, and the whole page scrolls as one.
 - **The bar at the bottom** has Back, Play and Next, a slider, and the part of the algorithm you are in. You can
-  also **swipe** the picture left for the next step and right for the step before. The **⚙** button sets the
-  speed, Key steps or Every line, and Predict mode.
+  also **swipe** the picture left for the next step and right for the step before. The **⚙** button opens
+  Settings, with the playback options first (speed, Key steps or Every line, Predict mode).
 - **Examples** open full screen with a search box; Help and the Complexity Lab also fill the screen.
 - Tablets held sideways keep the laptop layout with finger-sized controls; there the explanation sits under the
   picture. For watching on a sideways tablet, **Present** mode works well.
@@ -70,10 +70,42 @@ Turn on **Predict** in the playback bar. Before every comparison the animation s
 example *"Is arr[1] = 1 less than arr[0] = 5?"*. Let students answer, then click **Yes** / **No** (or press **Y** / **N**).
 AlgoScope shows **✓ Correct!** or **✗ Not this time** and reveals the step. Press Play or Next to continue.
 
+## Settings
+
+**Settings** (the ⚙ button in the top bar) has every option in one place. They are saved on this device, and
+**Reset all settings** brings back the defaults.
+
+| Setting | Choices |
+|---|---|
+| Theme | Light, Dark, or Same as device |
+| Text size | − / + from 70% to 180%, for projectors and the back row (laptops; phones use a fixed size) |
+| Colors | Standard, or **Color-blind friendly**: compared, swapped, changed and locked stay easy to tell apart with red–green or blue–yellow color blindness |
+| Animations | On, or Off (values jump to their new place instead of sliding) |
+| How much to show | Focus or Full detail (laptops) |
+| Which steps to show | Key steps or Every line |
+| Speed | 0.25× to 8× |
+| After Run | Play right away, or Wait for me (stop on the first step until you press Play or Next) |
+| Predict mode | Off, or Ask me first |
+
+The quick buttons for Focus / Full detail, Key steps / Every line, Predict and the speed stay where they were;
+they and Settings change the same setting.
+
+## Install as an app
+
+AlgoScope can be installed like an app: it gets its own icon and window and opens without internet.
+Open **Settings → Install as an app**:
+
+- **Chrome or Edge** (Windows, Mac, Chromebook, Android): press **Install AlgoScope**. On a computer an
+  **Install** button also appears in the top bar while the browser offers it.
+- **iPhone and iPad:** tap **Share** (the square with an arrow), then **Add to Home Screen**.
+- **Safari on a Mac:** **File → Add to Dock**.
+- **Firefox** cannot install websites as apps, but AlgoScope still works offline there (see below).
+
 ## Offline use
 
-After AlgoScope has been opened once (with internet), it keeps a copy in the browser. It opens and runs all five
-languages without internet afterwards, which is useful if the classroom Wi-Fi is unreliable. Open it once before class.
+After AlgoScope has been opened once (with internet), it keeps a copy of every file in the browser, a few seconds
+after the page opens. It then opens and runs all five languages without internet, in the browser and as an
+installed app, which is useful if the classroom Wi-Fi is unreliable. Open it once before class.
 
 ## 2. Running an algorithm
 
@@ -100,6 +132,9 @@ Under **In code terms**, each step is also described technically, for example:
 | Green | the value is in its final sorted place (it will not be touched again) |
 | Yellow tags under cells (`i`, `j`, `mid`, `low`…) | which index each variable points to |
 | Faded cells | outside the current range (`left..right`, `low..high`) |
+
+With **Settings → Colors → Color-blind friendly**, compared is blue, swapped is orange (pink in the dark theme),
+changed is yellow and locked is dark navy (white in the dark theme).
 
 Depending on the code, AlgoScope also draws:
 
@@ -187,11 +222,12 @@ elements) for animations, and the Complexity Lab for bigger sizes.
 - **Projectors:** AlgoScope is checked at 1920×1080, 1366×768, 1280×720 and 1024×768. On short screens the picture
   shrinks just enough to stay above the explanation, arrays shrink to fit the width, and in Present mode the explanation
   moves above the code so the picture keeps the whole left side.
-- **+ / −** enlarge or shrink the code and the picture for the projector.
-- The **moon / sun** button switches to a dark theme, which often looks better on projectors.
+- **Settings → Text size** (− / +) enlarges or shrinks the code and the picture for the projector.
+- **Settings → Theme → Dark** often looks better on projectors that wash out colors.
 - **Shareable links**: add options to the address to open a specific state, for example
   `https://codrei.github.io/AlgoScope/?example=merge-sort&lang=java&run=1&present=1`
-  (`example`, `lang` = c / cpp / java / csharp / python, `run=1`, `step=40`, `present=1`, `theme=dark`, `lab=1`).
+  (`example`, `lang` = c / cpp / java / csharp / python, `run=1`, `step=40`, `present=1`, `theme=dark`, `lab=1`,
+  `settings=1` opens Settings).
 
 ## Example list
 

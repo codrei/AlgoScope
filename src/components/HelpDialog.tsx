@@ -20,7 +20,7 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
               <li>Press the yellow <b>Run</b> button at the bottom. AlgoScope switches to <b>Watch</b> by itself.</li>
               <li>The bar at the bottom moves through the run: <b>Back</b>, <b>Play</b> and <b>Next</b>, or drag the slider. You can also <b>swipe</b> the picture left for the next step and right for the step before. Above the bar you see which part of the algorithm you are in (for example <i>Pass 2 of 5</i>).</li>
               <li>Under the picture: what just happened, then the line of code that ran. Tap the code to see the whole program.</li>
-              <li>The <b>⚙</b> button sets the speed, Key steps or Every line, and Predict mode.</li>
+              <li>The <b>⚙</b> button opens <b>Settings</b>: the speed, Key steps or Every line, Predict mode, the theme, color-blind friendly colors, and <b>Install as an app</b> to put AlgoScope on your home screen.</li>
             </ul>
           </>
         )}
@@ -63,6 +63,11 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
         <ul>
           <li>Turn on <b>Predict</b> in the playback bar to pause before every comparison and let the class guess. Answer with <b>Yes</b> / <b>No</b> or the <kbd>Y</kbd> / <kbd>N</kbd> keys.</li>
         </ul>
+        <h3>Settings and installing</h3>
+        <ul>
+          <li><b>Settings</b> (top bar) has every option in one place: theme (light, dark or same as the device), text size, color-blind friendly colors, animations, how much to show, which steps, speed, Predict mode, and whether a run starts playing by itself. They are saved on this device; <b>Reset all settings</b> brings back the defaults.</li>
+          <li><b>Install as an app</b> (in Settings) puts AlgoScope on your home screen or computer. It opens in its own window and works without internet.</li>
+        </ul>
         <h3>What the colors mean</h3>
         <div className="legend">
           <span><i className="compare" /> compared</span>
@@ -74,7 +79,7 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
         <h3>For the classroom</h3>
         <ul>
           <li><b>Present</b> shows the picture large with the code underneath, like a lecture slide.</li>
-          <li><b>+ / −</b> make the code bigger for projectors. The moon / sun button switches dark and light themes.</li>
+          <li><b>Settings → Text size</b> (+ / −) makes the code and the picture bigger for projectors. <b>Settings → Theme</b> switches light and dark.</li>
           <li>The counters show how many comparisons, swaps and calls the algorithm made, which is a way to compare
             O(n²) and O(n log n) on the same input.</li>
         </ul>

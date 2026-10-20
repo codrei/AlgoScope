@@ -440,7 +440,7 @@ export function MatrixGraphView({ item, names, step }: { item: HeapArr; names: s
               <g key={i} transform={`translate(${p.x},${p.y})`}>
                 {isCur && <circle r={nodeR + 6} fill="none" stroke="var(--nu-gold)" strokeWidth={3} opacity={0.6} />}
                 <circle r={nodeR} fill={fill} stroke={stroke} strokeWidth={isCur ? 4 : 2.5} />
-                <text textAnchor="middle" y={5} fontSize={15} fontWeight={800} fill={vis ? '#fff' : 'var(--text)'}>{i}</text>
+                <text textAnchor="middle" y={5} fontSize={15} fontWeight={800} fill={vis ? 'var(--locked-text)' : 'var(--text)'}>{i}</text>
                 {d && (
                   <text textAnchor="middle" y={nodeR + 15} fontSize={11.5} fontWeight={700} fill="var(--nu-gold-text)">
                     {cellText(d)}

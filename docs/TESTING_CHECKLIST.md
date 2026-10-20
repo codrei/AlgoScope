@@ -9,7 +9,8 @@ after an update).
       background. After that AlgoScope works even if the Wi-Fi drops. (To double-check, run one example in each
       language tab.)
 - [ ] Connect the projector and press **Present**. At 1280×720 the explanation sits above the code on the right.
-- [ ] Try **+** once or twice if the back row needs bigger text, and the moon button if the projector washes out colors.
+- [ ] If the back row needs bigger text, open **Settings** and press **+** under Text size once or twice. If the
+      projector washes out colors, choose **Theme → Dark** there.
 - [ ] Keep these links ready (they open straight into a run):
   - `https://codrei.github.io/AlgoScope/?example=bubble-sort&lang=cpp&run=1&present=1`
   - `https://codrei.github.io/AlgoScope/?example=heap-sort&lang=java&run=1&present=1`
@@ -20,7 +21,9 @@ after an update).
 - [ ] Open the site: the **Code** tab shows the editor and a yellow **Run** button at the bottom.
 - [ ] Press Run: it switches to **Watch**; the picture is at the top and nothing covers it.
 - [ ] Back / Play / Next at the bottom work, and swiping the picture left / right steps too.
-- [ ] Open the examples menu (top), search "stack", pick one; the ⚙ button changes the speed.
+- [ ] Open the examples menu (top), search "stack", pick one; the ⚙ button opens Settings and changes the speed.
+- [ ] Settings → Install as an app: on Android press **Install AlgoScope**; on an iPhone follow the Share → Add to
+      Home Screen steps. Open it from the home screen icon, turn on airplane mode, and Run an example.
 - [ ] Turn a tablet sideways and back: the layout switches and the step stays the same.
 
 ## Quick check (10 minutes)
@@ -29,7 +32,8 @@ after an update).
 - [ ] **Run** animates; the gold line in the editor moves with the steps.
 - [ ] Space pauses, ← → step, the slider jumps, the speed menu works.
 - [ ] Switch each language tab (C, C++, Java, C#, Python) and Run: the output panel says `Sorted: 1 2 3 4 5 8` every time.
-- [ ] Present mode, dark theme, + / − all work.
+- [ ] Present mode works. In Settings: Dark theme, Text size + / −, Color-blind friendly colors, Animations Off and
+      Wait for me all work, and stay after a reload; Reset all settings brings back the defaults.
 - [ ] Complexity button opens the lab and draws the chart for a sorting example.
 
 ## Full check: every example in every language
