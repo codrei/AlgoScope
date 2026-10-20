@@ -84,7 +84,7 @@ export function EditorPane(p: Props) {
   const monacoLang = LANGS.find((l) => l.id === p.lang)!.monaco;
 
   return (
-    <section className="panel" aria-label="Code editor">
+    <section className="panel editor-panel" aria-label="Code editor">
       <div className="editor-head">
         <div className="lang-tabs" role="tablist" aria-label="Language">
           {LANGS.map((l) => (

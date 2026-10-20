@@ -3,6 +3,7 @@ import { EditorPane } from './components/EditorPane';
 import { ComplexityLab } from './components/ComplexityLab';
 import { LANGS } from './components/EditorPane';
 import { HelpDialog } from './components/HelpDialog';
+import { MobileBar, PlaybackSettings } from './components/MobileBar';
 import { ChapterBar, Playback } from './components/Playback';
 import { TopBar } from './components/TopBar';
 import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visualizer';
@@ -13,6 +14,7 @@ import { buildCallTree, computeGaps, computeImportance, computeLocks, keySteps, 
 import { captionFor, momentFor, runInfo } from './lib/captions';
 import { chapterPositions, chaptersFor } from './lib/chapters';
 import { labKind } from './lib/complexity';
+import { PHONE_QUERY, useMediaQuery } from './lib/useMedia';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -98,6 +100,10 @@ export default function App() {
   const [predict, setPredict] = useState(() => load('as.predict', false));
   const [quiz, setQuiz] = useState<{ step: number; answer?: 'Yes' | 'No' } | null>(null);
   const [keyOnly, setKeyOnly] = useState(() => load('as.keyOnly', true));
+  // phones: separate Code and Watch views, controls at the bottom
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [mview, setMview] = useState<'code' | 'watch'>(() => (P.run || P.present ? 'watch' : 'code'));
+  const [settings, setSettings] = useState(false);
   const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
 
   const code = codes[lang];
@@ -138,6 +144,8 @@ export default function App() {
       }
       setCompileError(null);
       setTrace(r.trace!);
+      // phones: show the run (a compile error keeps the Code view, where the error is shown)
+      setMview('watch');
       if (startStep.current !== null) {
         setStepIndex(Math.max(0, Math.min(startStep.current, r.trace!.steps.length - 1)));
         startStep.current = null;
@@ -324,6 +332,12 @@ export default function App() {
 
   const step = trace?.steps[stepIndex];
   const atEnd = !!trace && stepIndex === trace.steps.length - 1;
+  // phones never use Present mode or Full detail: one calm column
+  const isPresent = present && !phone;
+  const viewMode: ViewMode = phone ? 'beginner' : mode;
+  useEffect(() => {
+    if (phone) document.querySelector('.main')?.scrollTo({ top: 0 });
+  }, [mview, phone]);
   const errorLine = compileError?.line || (trace?.error && atEnd ? trace.error.line : 0) || null;
   const errorMsg = compileError?.msg ?? (trace?.error && atEnd ? trace.error.msg : null);
 
@@ -343,8 +357,14 @@ export default function App() {
         onLab={() => setLab(true)}
         onZoom={(d) => setZoom((z: number) => Math.min(1.8, Math.max(0.7, Math.round((z + d * 0.1) * 10) / 10)))}
       />
-      <main className={`main ${present ? 'present' : ''}`}>
-        {!present && (
+      {phone && (
+        <div className="m-switch" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={mview === 'code'} className={mview === 'code' ? 'active' : ''} onClick={() => setMview('code')}>Code</button>
+          <button role="tab" aria-selected={mview === 'watch'} className={mview === 'watch' ? 'active' : ''} onClick={() => setMview('watch')}>Watch</button>
+        </div>
+      )}
+      <main className={`main ${isPresent ? 'present' : ''} ${phone ? `phone view-${mview}` : ''}`}>
+        {!isPresent && (
           <EditorPane
             lang={lang}
             code={code}
@@ -380,19 +400,30 @@ export default function App() {
           />
         )}
         <section className="panel viz" aria-label="Visualization">
-          <div className="viz-scroll" style={{ zoom }}>
+          <div className="viz-scroll" style={phone ? undefined : { zoom }}>
+            {phone && stale && !compileError && (
+              <div className="notice m-stale">
+                The code changed since this run. <button className="m-link" onClick={run}>Run the new code</button>
+              </div>
+            )}
             {trace?.truncated && atEnd && (
               <div className="notice" role="status">
                 Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. If a loop never ends, check
                 that its condition can become false (is the counter changing?). Otherwise try a smaller input.
               </div>
             )}
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={mode} onMode={setMode} code={traceCode || code} present={present} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={viewMode} onMode={setMode} code={traceCode || code} present={isPresent} phone={phone} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />
           </div>
-          {chPos.length >= 2 && <ChapterBar chapters={chPos} pos={pos} total={total} onJump={goto} onStep={jumpChapter} />}
-          <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />
+          {!phone && chPos.length >= 2 && <ChapterBar chapters={chPos} pos={pos} total={total} onJump={goto} onStep={jumpChapter} />}
+          {!phone && <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />}
         </section>
       </main>
+      {phone && (
+        <MobileBar view={mview} running={running} onRun={run} chapters={chPos} pos={pos} total={total} playing={playing} onIndex={goto} onPlay={togglePlay} onSettings={() => setSettings(true)} />
+      )}
+      {phone && settings && (
+        <PlaybackSettings onClose={() => setSettings(false)} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} speed={speed} onSpeed={setSpeed} />
+      )}
       {help && <HelpDialog onClose={() => setHelp(false)} />}
       {lab && <ComplexityLab example={example} lang={lang} langLabel={LANGS.find((l) => l.id === lang)!.label} onClose={() => setLab(false)} />}
     </div>

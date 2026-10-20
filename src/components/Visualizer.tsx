@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Layers, Terminal } from 'lucide-react';
+import { ChevronDown, ChevronRight, Info, Layers, Terminal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
 import { lockedCells, recursionRoot, structuresFor, type CallNode, type LockInfo, type StructRef } from '../lib/analysis';
@@ -40,37 +40,45 @@ interface Props {
   summary?: { title: string; time: string; topic: string } | null;
   /** opens the Complexity Lab (sorting and searching examples) */
   onLab?: () => void;
+  /** phone layout: compact header, picture first, a few lines of code under it, nothing on top of the picture */
+  phone?: boolean;
 }
 
-export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, moment, quiz, onAnswer, locks, calls, importance, gaps, mode, onMode, code, present, summary, onLab }: Props) {
+export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, moment, quiz, onAnswer, locks, calls, importance, gaps, mode, onMode, code, present, summary, onLab, phone }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
   const beginner = mode === 'beginner';
   const short = useShortScreen();
+  const [about, setAbout] = useState(false);
   const card = step && (
-    <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} locks={locks}>
+    <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} locks={locks} lean={phone}>
       {isLast && step.kind === 'end' && <RunSummary trace={trace!} step={step} summary={summary ?? null} onLab={onLab} />}
     </StepCard>
   );
   return (
     <>
-      <div className={`viz-header ${beginner ? 'compact' : ''}`}>
+      <div className={`viz-header ${beginner ? 'compact' : ''} ${phone ? 'm-header' : ''}`}>
         <div className="viz-header-row">
           <div>
             <div className="eyebrow">{header.eyebrow}</div>
             <h1>{header.title}</h1>
           </div>
-          <div className="seg mode-toggle" role="tablist" aria-label="How much to show">
+          {phone && header.description && (
+            <button className={`m-about ${about ? 'active' : ''}`} onClick={() => setAbout(!about)} aria-expanded={about} aria-label="About this algorithm">
+              <Info size={20} />
+            </button>
+          )}
+          {!phone && <div className="seg mode-toggle" role="tablist" aria-label="How much to show">
             <button role="tab" aria-selected={beginner} className={beginner ? 'active' : ''} onClick={() => onMode('beginner')} title="Only the main picture, the explanation and the current variables">
               Focus
             </button>
             <button role="tab" aria-selected={!beginner} className={!beginner ? 'active' : ''} onClick={() => onMode('detailed')} title="Everything: counters, call stack, Big-O, all data">
               Full detail
             </button>
-          </div>
+          </div>}
         </div>
-        {header.description && <p>{header.description}</p>}
+        {header.description && (!phone || about) && <p>{header.description}</p>}
         {!beginner && (
           <div className="pills">
             {header.pills.map((p) => (
@@ -81,7 +89,7 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
         )}
       </div>
       {!step ? (
-        <Welcome />
+        <Welcome phone={phone} />
       ) : present && code ? (
         <div className="present-grid">
           <div className="present-main">
@@ -99,8 +107,18 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
       ) : (
         <>
           <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} gaps={gaps} isLast={isLast} beginner={beginner} />
+          {/* phones: the explanation right under the picture, then the code lines */}
           {card}
-          {beginner ? (
+          {phone && code && <MiniCode code={code} line={step.ln} />}
+          {phone ? (
+            <>
+              <OutputBox trace={trace!} step={step} compact />
+              <details className="m-fold">
+                <summary>Variables</summary>
+                <VarChips step={step} prev={prev} />
+              </details>
+            </>
+          ) : beginner ? (
             <>
               <VarChips step={step} prev={prev} focus />
               <OutputBox trace={trace!} step={step} compact />
@@ -125,15 +143,23 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
   );
 }
 
-function Welcome() {
+function Welcome({ phone }: { phone?: boolean }) {
   return (
     <div className="welcome">
       <h2>How to use AlgoScope</h2>
-      <ol>
-        <li><b>Pick an algorithm</b> from <b>Examples</b> at the top, or type your own code on the left.</li>
-        <li>Press the yellow <b>Run</b> button.</li>
-        <li>Watch the picture here. Press <b>Pause</b>, then use <b>Back</b> and <b>Next</b> to go one step at a time.</li>
-      </ol>
+      {phone ? (
+        <ol>
+          <li><b>Pick an algorithm</b> from the menu at the top, or write your own code in the <b>Code</b> tab.</li>
+          <li>Press the yellow <b>Run</b> button at the bottom.</li>
+          <li>Watch the picture here. Use <b>Back</b> and <b>Next</b> at the bottom to go one step at a time.</li>
+        </ol>
+      ) : (
+        <ol>
+          <li><b>Pick an algorithm</b> from <b>Examples</b> at the top, or type your own code on the left.</li>
+          <li>Press the yellow <b>Run</b> button.</li>
+          <li>Watch the picture here. Press <b>Pause</b>, then use <b>Back</b> and <b>Next</b> to go one step at a time.</li>
+        </ol>
+      )}
       <p>Every step is explained in plain English, and the line that just ran is highlighted in the code.</p>
     </div>
   );
@@ -298,7 +324,18 @@ function FitToView({ children }: { children: ReactNode }) {
       const h = i.offsetHeight; // layout height, not affected by the transform
       setNatural(h);
       let target = 1;
-      if (scroller && window.innerWidth >= 980 && h > 0) {
+      const phoneMain = window.innerWidth < 700 ? (o.closest('.main.phone') as HTMLElement | null) : null;
+      if (phoneMain && h > 0) {
+        // phones: the page scrolls; keep the top of the explanation in view above the bottom bar
+        const card = o.parentElement?.querySelector(':scope > .step-card') as HTMLElement | null;
+        const bar = document.querySelector('.m-bar') as HTMLElement | null;
+        const box = phoneMain.getBoundingClientRect();
+        const top = o.getBoundingClientRect().top - box.top + phoneMain.scrollTop;
+        const cardTop = Math.min(card?.getBoundingClientRect().height ?? 0, 140);
+        const room = phoneMain.clientHeight - (bar?.offsetHeight ?? 0) - top - cardTop - 20;
+        const shown = i.getBoundingClientRect().height / scaleRef.current;
+        target = Math.max(0.7, Math.min(1, Math.floor((room / shown) * 20) / 20));
+      } else if (scroller && window.innerWidth >= 980 && h > 0) {
         // measure on screen (getBoundingClientRect), so the text-size zoom and our own scale are included
         // the explanation card that follows the picture in the same column (none when it sits beside the code)
         const card = o.parentElement?.querySelector(':scope > .step-card') as HTMLElement | null;
@@ -376,9 +413,11 @@ function StepCard(p: {
   quiz: { step: number; answer?: 'Yes' | 'No' } | null;
   onAnswer: (a: 'Yes' | 'No') => void;
   locks: Map<number, LockInfo>;
+  /** phones: one main sentence; the phase caption and the code-level sentence move out of the way */
+  lean?: boolean;
   children?: ReactNode;
 }) {
-  const { step, stepIndex, position, total, caption, moment, quiz, onAnswer, locks, children } = p;
+  const { step, stepIndex, position, total, caption, moment, quiz, onAnswer, locks, lean, children } = p;
   const [showCode, setShowCode] = useState(false);
   const m = /^(.*?\?) (Yes|No)\b/.exec(step.say);
   // Predict asks the idea version of the question when there is one ("is 5 bigger than 1?")
@@ -415,14 +454,14 @@ function StepCard(p: {
         <span className="step-label">What just happened</span>
         <span className="step-num">Step {position + 1} of {total}</span>
       </div>
-      {caption && <p className="step-caption">{caption}</p>}
+      {caption && !(lean && moment) && <p className="step-caption">{caption}</p>}
       {verdict && (
         <p className={`quiz-verdict ${verdict}`}>{verdict === 'right' ? '✓ Correct!' : `✗ Not this time: the answer is ${m![2]}.`}</p>
       )}
       {moment ? (
         <>
           <p className="step-say">{moment}</p>
-          <p className="step-say-code">{step.say}</p>
+          {!lean && <p className="step-say-code">{step.say}</p>}
         </>
       ) : (
         <p className="step-say">{step.say}</p>
@@ -433,6 +472,7 @@ function StepCard(p: {
       <button className="code-toggle" onClick={() => setShowCode(!showCode)} aria-expanded={showCode}>
         {showCode ? <ChevronDown size={13} /> : <ChevronRight size={13} />} In code terms
       </button>
+      {showCode && lean && moment && <p className="step-say-code">{step.say}</p>}
       {showCode && <p className="step-code">{step.text}</p>}
       {children}
     </div>
@@ -669,6 +709,40 @@ function highlight(line: string) {
   }
   if (last < line.length) out.push(line.slice(last));
   return out.map((p, i) => (typeof p === 'string' ? p : <span key={i} className={p.c}>{p.t}</span>));
+}
+
+/** Phones: the line that just ran with one line before and after it; tap to see the whole program. */
+function MiniCode({ code, line }: { code: string; line: number }) {
+  const [open, setOpen] = useState(false);
+  const lines = code.split('\n');
+  if (!line || line > lines.length) return null;
+  if (open) {
+    return (
+      <div className="m-code-full">
+        <button className="m-code-toggle" onClick={() => setOpen(false)}>Show less</button>
+        <CodePanel code={code} line={line} />
+      </div>
+    );
+  }
+  const from = Math.max(1, line - 1);
+  const to = Math.min(lines.length, line + 1);
+  const shown = lines.slice(from - 1, to);
+  // drop the indentation these lines share, so they fit a narrow screen
+  const indent = Math.min(...shown.filter((l) => l.trim()).map((l) => l.length - l.trimStart().length));
+  return (
+    <button className="m-code" onClick={() => setOpen(true)} aria-label="Show the whole program">
+      {shown.map((l, k) => {
+        const n = from + k;
+        return (
+          <div key={n} className={`pc-line ${n === line ? 'active' : ''}`}>
+            <span className="no">{n}</span>
+            <span>{highlight(Number.isFinite(indent) ? l.slice(indent) : l)}</span>
+          </div>
+        );
+      })}
+      <span className="m-code-more">Tap to see the whole program</span>
+    </button>
+  );
 }
 
 function CodePanel({ code, line }: { code: string; line: number }) {

@@ -2298,3 +2298,490 @@ input {
 }
 
 .legend i.source { border: 2px dashed var(--compare); background: var(--compare-bg); }
+
+/* ===================================================================== phones
+   Separate Code and Watch views, one scrolling page, nothing on top of the picture,
+   and the controls in one bar at the bottom where the thumb is. Only for narrow screens:
+   the laptop and projector layout above is unchanged. */
+button,
+[role='tab'],
+input[type='range'] {
+  touch-action: manipulation;
+}
+
+.m-switch {
+  display: flex;
+  gap: 4px;
+  margin: 8px 12px 0;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.m-switch button,
+.m-seg button {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.m-switch button.active,
+.m-seg button.active {
+  background: var(--nu-blue);
+  color: #fff;
+}
+
+:root[data-theme='dark'] .m-switch button.active,
+:root[data-theme='dark'] .m-seg button.active {
+  background: var(--nu-gold);
+  color: #24235e;
+}
+
+.main.phone {
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px calc(128px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+.main.phone.view-code {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+
+.main.phone.view-code .panel.viz,
+.main.phone.view-watch .editor-panel {
+  display: none;
+}
+
+.main.phone .editor-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* the bottom bar has the Run button */
+.main.phone .editor-panel .run-btn:not(.small) {
+  display: none;
+}
+
+.main.phone .panel.viz {
+  overflow: visible;
+  border-radius: 14px;
+}
+
+.main.phone .viz-scroll {
+  overflow: visible;
+  padding: 14px 14px 16px;
+  gap: 12px;
+}
+
+/* the explanation sits under the picture, never on top of it */
+.main.phone .viz-scroll > .step-card {
+  position: static;
+  box-shadow: none;
+  backdrop-filter: none;
+  background: var(--surface-2);
+}
+
+.main.phone .step-say {
+  font-size: 17px;
+}
+
+.main.phone .viz-header p {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.m-header h1 {
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.m-about {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.m-about.active {
+  background: var(--nu-blue-soft);
+  color: var(--nu-blue);
+}
+
+/* a few lines of the program under the picture */
+.m-code {
+  display: block;
+  width: 100%;
+  padding: 6px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.m-code .pc-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-code .pc-line .no {
+  width: 36px;
+  padding-right: 10px;
+}
+
+.m-code-more {
+  display: block;
+  padding: 3px 14px 2px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.m-code-full .present-code {
+  max-height: 50vh;
+  font-size: 13.5px;
+}
+
+.m-code-toggle {
+  min-height: 40px;
+  margin-bottom: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.m-fold {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.m-fold summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  font-weight: 700;
+  font-size: 14px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.m-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.m-fold summary::before {
+  content: '▸';
+  margin-right: 8px;
+  transition: transform 0.15s;
+}
+
+.m-fold[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.m-fold .var-chips {
+  padding: 0 12px 12px;
+}
+
+.m-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-link {
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--nu-blue);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* the bottom bar */
+.m-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 18px rgba(20, 20, 60, 0.08);
+}
+
+.m-where {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.m-chapter {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 800;
+  color: var(--nu-blue);
+}
+
+:root[data-theme='dark'] .m-chapter {
+  color: var(--nu-gold);
+}
+
+.m-count {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  color: var(--text-3);
+}
+
+.m-scrub:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.m-scrub {
+  width: 100%;
+  height: 28px;
+  margin: 2px 0 4px;
+  accent-color: var(--nu-blue);
+}
+
+.m-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-btn {
+  flex: 1;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.m-play {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--nu-blue);
+  color: #fff;
+  cursor: pointer;
+}
+
+:root[data-theme='dark'] .m-play {
+  background: var(--nu-gold);
+  color: #24235e;
+}
+
+.m-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.m-run {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 14px;
+  background: var(--nu-gold);
+  color: #24235e;
+  font-weight: 800;
+  font-size: 17px;
+  box-shadow: 0 2px 0 var(--nu-gold-deep);
+  cursor: pointer;
+}
+
+.m-bar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* panels that slide up from the bottom */
+.m-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(15, 15, 40, 0.45);
+}
+
+.m-sheet {
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 6px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: var(--surface);
+  animation: sheet-up 0.22s ease-out;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(40px); opacity: 0.6; }
+}
+
+.m-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+}
+
+.m-sheet-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.m-setting {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.m-setting-label {
+  margin-bottom: 8px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.m-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.m-seg.speeds button {
+  font-size: 13.5px;
+}
+
+.m-setting-hint {
+  margin: 6px 2px 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+@media (max-width: 699px) {
+  .topbar {
+    min-height: 58px;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  /* a long example name shrinks (with …) instead of making the page wider than the phone */
+  .topbar .menu-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar .menu-wrap > .topbar-btn {
+    max-width: 100%;
+  }
+
+  .topbar .menu-wrap > .topbar-btn .label.keep {
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .topbar-spacer {
+    display: none;
+  }
+
+  .topbar-btn {
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .editor-panel .lang-tabs button,
+  .editor-panel .ghost-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .code-toggle,
+  .stdin-toggle {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .m-scrub {
+    height: 36px;
+  }
+
+  /* a smaller title leaves room for the picture */
+  .m-header .eyebrow {
+    font-size: 10.5px;
+  }
+
+  .main.phone .stage-legend {
+    margin-top: -4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-sheet { animation: none; }
+}
