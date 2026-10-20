@@ -10,6 +10,7 @@ import { TopBar } from './components/TopBar';
 import { Visualizer, type HeaderInfo, type ViewMode } from './components/Visualizer';
 import { configureEngine, preload, runCode, type Trace } from './engine';
 import type { Lang } from './engine/ir';
+import type { Step } from './engine/trace';
 import { EXAMPLES, type Example } from './examples';
 import { buildCallTree, computeGaps, computeImportance, computeLocks, keySteps, type CallNode, type LockInfo } from './lib/analysis';
 import { captionFor, momentFor, runInfo } from './lib/captions';
@@ -51,6 +52,20 @@ function exampleCode(e: Example, l: Lang): string {
   const other = e.only ? LANG_NAMES[e.only] : 'another language';
   return `${comment} "${e.title}" is written in ${other} only.\n${comment} Switch to the ${other} tab to run it, or write your own ${LANG_NAMES[l]} version here.\n`;
 }
+
+/**
+ * Predict mode asks before comparisons ("is 5 bigger than 1?") and before if-decisions ("is n <= 1
+ * true?"), not before loop checks, which repeat every round.
+ */
+function isQuestionStep(st: Step): boolean {
+  if (!/\? (Yes|No)\b/.test(st.say)) return false;
+  return st.kind === 'compare' || (st.kind === 'check' && /^IF /.test(st.text));
+}
+/** a loop check ("is b != 0 true?"): asked only in runs that have no comparisons or decisions */
+function isLoopQuestion(st: Step): boolean {
+  return st.kind === 'check' && /\? (Yes|No)\b/.test(st.say) && /^(WHILE |(.* · )?CHECK )/.test(st.text);
+}
+const answerOf = (st: Step) => /^(.*?\?) (Yes|No)\b/.exec(st.say)?.[2] as 'Yes' | 'No' | undefined;
 
 const allCodes = (e: Example) => Object.fromEntries(LANG_IDS.map((l) => [l, exampleCode(e, l)])) as Record<Lang, string>;
 
@@ -115,6 +130,8 @@ export default function App() {
   const [zoom, setZoom] = useState(() => load('as.zoom', 1));
   const [predict, setPredict] = useState(() => load('as.predict', false));
   const [quiz, setQuiz] = useState<{ step: number; answer?: 'Yes' | 'No' } | null>(null);
+  const [score, setScore] = useState({ right: 0, asked: 0 });
+  const [toast, setToast] = useState<string | null>(null);
   const [keyOnly, setKeyOnly] = useState(() => load('as.keyOnly', true));
   // phones: separate Code and Watch views, controls at the bottom
   const phone = useMediaQuery(COMPACT_QUERY);
@@ -207,10 +224,22 @@ export default function App() {
   // changes, calls...). `view` lists the trace indexes the controls move through.
   const keyIdx = useMemo(() => (trace ? keySteps(trace) : []), [trace]);
   const gaps = useMemo(() => (trace ? computeGaps(trace) : []), [trace]);
-  const view = useMemo(
-    () => (!trace ? [] : keyOnly && keyIdx.length > 1 ? keyIdx : trace.steps.map((_, i) => i)),
-    [trace, keyOnly, keyIdx],
-  );
+  // Predict mode also stops on the questions that Key steps would skip (if-decisions)
+  const questionIdx = useMemo(() => {
+    if (!trace) return [];
+    const q = trace.steps.flatMap((st, i) => (isQuestionStep(st) ? [i] : []));
+    if (q.length) return q;
+    // only loops (Euclid's GCD, a DP table filled by a loop): ask the loop checks, unless there are too many
+    const loops = trace.steps.flatMap((st, i) => (isLoopQuestion(st) ? [i] : []));
+    return loops.length <= 40 ? loops : [];
+  }, [trace]);
+  const questionSet = useMemo(() => new Set(questionIdx), [questionIdx]);
+  const view = useMemo(() => {
+    if (!trace) return [];
+    if (!(keyOnly && keyIdx.length > 1)) return trace.steps.map((_, i) => i);
+    if (!predict) return keyIdx;
+    return [...new Set([...keyIdx, ...questionIdx])].sort((a, b) => a - b);
+  }, [trace, keyOnly, keyIdx, predict, questionIdx]);
   const pos = useMemo(() => {
     let p = 0;
     for (let k = 0; k < view.length; k++) if (view[k] <= stepIndex) p = k;
@@ -224,11 +253,8 @@ export default function App() {
   const chapters = useMemo(() => (trace ? chaptersFor(trace, exampleRun ? example.id : null, info) : []), [trace, exampleRun, example.id, info]);
   const chPos = useMemo(() => chapterPositions(chapters, view), [chapters, view]);
 
-  // Predict mode: moving forward onto a comparison asks the class first.
-  const isQuestion = useCallback((i: number) => {
-    const st = trace?.steps[i];
-    return !!st && st.kind === 'compare' && /\? (Yes|No)\b/.test(st.say);
-  }, [trace]);
+  // Predict mode: moving forward onto a comparison or a decision asks the class first.
+  const isQuestion = useCallback((i: number) => questionSet.has(i), [questionSet]);
   const moveTo = useCallback(
     (i: number, forward: boolean) => {
       setStepIndex(i);
@@ -268,8 +294,47 @@ export default function App() {
   }, [trace, playing, pos, total, view]);
 
   // keyboard shortcuts (ignored while typing in the editor or a field)
-  const answer = useCallback((a: 'Yes' | 'No') => setQuiz((q) => (q ? { ...q, answer: a } : q)), []);
+  const answer = useCallback(
+    (a: 'Yes' | 'No') => {
+      if (!quiz || quiz.answer || !trace) return;
+      setQuiz({ ...quiz, answer: a });
+      setScore((sc) => ({ right: sc.right + (answerOf(trace.steps[quiz.step]) === a ? 1 : 0), asked: sc.asked + 1 }));
+    },
+    [quiz, trace],
+  );
+  // a new run starts a new score
+  useEffect(() => {
+    setScore({ right: 0, asked: 0 });
+    setQuiz(null);
+  }, [trace]);
+
+  // short messages that disappear by themselves (turning Predict on or off)
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+  const changePredict = (on: boolean) => {
+    setPredict(on);
+    if (!on) {
+      setToast('Predict is off.');
+      return;
+    }
+    const n = questionIdx.length;
+    const atLast = !!trace && pos >= total - 1;
+    setToast(
+      !trace
+        ? 'Predict is on. Press Run: the run will stop before each comparison and decision and ask you to guess Yes or No.'
+        : n === 0
+        ? 'Predict is on, but this run has no comparisons or decisions to guess (only loops). Try a sorting, searching or recursion example.'
+        : `Predict is on: the run will stop before each of its ${n} comparisons and decisions and ask you to guess Yes or No. ${atLast ? 'Press Play to watch it again from the start.' : 'Press Play or Next.'}`,
+    );
+  };
   const quizOpen = !!quiz && quiz.step === stepIndex && !quiz.answer;
+  // the question is on screen: the "Predict is on" message must not cover the Yes / No buttons
+  useEffect(() => {
+    if (quizOpen) setToast(null);
+  }, [quizOpen]);
   const jumpChapter = useCallback(
     (dir: 1 | -1) => {
       if (!chPos.length) return;
@@ -289,6 +354,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
       if (el.closest('.monaco-editor') || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
+      // Settings, Help, the Complexity Lab: the keys belong to the open panel, not to the run behind it
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const k = keyRef.current;
       if (!k.total) return;
       if (e.key === ' ') {
@@ -392,15 +459,14 @@ export default function App() {
     if (phone) document.querySelector('.main')?.scrollTo({ top: 0 });
   }, [mview, phone]);
   const prefs: Prefs = { theme, zoom, palette, motion, mode, keyOnly, speed, predict, autoplay };
-  const setPref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
-    const set: { [P in keyof Prefs]: (v: Prefs[P]) => void } = {
-      theme: setTheme, zoom: setZoom, palette: setPalette, motion: setMotion, mode: setMode,
-      keyOnly: setKeyOnly, speed: setSpeed, predict: setPredict, autoplay: setAutoplay,
-    };
-    set[key](value);
+  const setters: { [P in keyof Prefs]: (v: Prefs[P]) => void } = {
+    theme: setTheme, zoom: setZoom, palette: setPalette, motion: setMotion, mode: setMode,
+    keyOnly: setKeyOnly, speed: setSpeed, predict: setPredict, autoplay: setAutoplay,
   };
+  // turning Predict on or off from Settings explains it, like the Predict button does
+  const setPref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => (key === 'predict' ? changePredict(value as boolean) : setters[key](value));
   const changeZoom = (d: number) => setZoom((z: number) => (d === 0 ? 1 : Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((z + d * 0.1) * 10) / 10))));
-  const resetPrefs = () => (Object.keys(DEFAULT_PREFS) as (keyof Prefs)[]).forEach((k) => setPref(k, DEFAULT_PREFS[k]));
+  const resetPrefs = () => (Object.keys(DEFAULT_PREFS) as (keyof Prefs)[]).forEach(<K extends keyof Prefs>(k: K) => setters[k](DEFAULT_PREFS[k]));
   const errorLine = compileError?.line || (trace?.error && atEnd ? trace.error.line : 0) || null;
   const errorMsg = compileError?.msg ?? (trace?.error && atEnd ? trace.error.msg : null);
 
@@ -475,10 +541,10 @@ export default function App() {
                 that its condition can become false (is the counter changing?). Otherwise try a smaller input.
               </div>
             )}
-            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={viewMode} onMode={setMode} code={traceCode || code} present={isPresent} phone={phone} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />
+            <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} score={score} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={viewMode} onMode={setMode} code={traceCode || code} present={isPresent} phone={phone} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />
           </div>
           {!phone && chPos.length >= 2 && <ChapterBar chapters={chPos} pos={pos} total={total} onJump={goto} onStep={jumpChapter} />}
-          {!phone && <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} />}
+          {!phone && <Playback index={pos} total={total} playing={playing} speed={speed} onIndex={goto} onPlay={togglePlay} onSpeed={setSpeed} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={changePredict} />}
         </section>
       </main>
       {phone && (
@@ -486,6 +552,11 @@ export default function App() {
       )}
       {settingsOpen && (
         <SettingsPanel prefs={prefs} onChange={setPref} onZoom={changeZoom} onReset={resetPrefs} onClose={() => setSettingsOpen(false)} touch={phone} />
+      )}
+      {toast && (
+        <div className={`toast ${phone ? 'm-toast' : ''}`} role="status" onClick={() => setToast(null)}>
+          {toast}
+        </div>
       )}
       {help && <HelpDialog onClose={() => setHelp(false)} phone={phone} />}
       {lab && <ComplexityLab example={example} lang={lang} langLabel={LANGS.find((l) => l.id === lang)!.label} onClose={() => setLab(false)} />}

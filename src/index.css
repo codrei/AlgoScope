@@ -2014,6 +2014,63 @@ input {
 .quiz-verdict.right { color: var(--locked); }
 .quiz-verdict.wrong { color: var(--swap); }
 
+/* touch screens: finger-sized answers, and no keyboard hints */
+@media (pointer: coarse) {
+  .quiz-btn {
+    min-height: 48px;
+    padding: 8px 28px;
+  }
+
+  .quiz-btn kbd {
+    display: none;
+  }
+}
+
+.quiz-score,
+.quiz-next {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* short messages that disappear by themselves (Predict on / off) */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 110px;
+  z-index: 90;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--nu-blue-deep);
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  animation: toast-in 0.2s ease-out;
+}
+
+:root[data-theme='dark'] .toast {
+  background: var(--nu-gold);
+  color: var(--nu-blue-deep);
+}
+
+.toast.m-toast {
+  bottom: calc(160px + env(safe-area-inset-bottom));
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+}
+
+.dialog:focus,
+.m-sheet:focus {
+  outline: none;
+}
+
 @media (max-width: 1700px) {
   .playback .step-count {
     display: none;

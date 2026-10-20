@@ -66,9 +66,16 @@ Phones (and tablets held upright) get a layout made for touch:
 
 ## Predict mode (for class discussion)
 
-Turn on **Predict** in the playback bar. Before every comparison the animation stops and asks the class, for
-example *"Is arr[1] = 1 less than arr[0] = 5?"*. Let students answer, then click **Yes** / **No** (or press **Y** / **N**).
-AlgoScope shows **✓ Correct!** or **✗ Not this time** and reveals the step. Press Play or Next to continue.
+1. Turn on **Predict** in the playback bar (on a phone: ⚙ → Predict mode → Ask me first). A short message says
+   how many questions the run has. Turning it on does not change the picture by itself.
+2. Press **Play** or **Next**. When the run reaches a comparison (*"Compare the neighbors 5 and 1: is 5 bigger?"*)
+   or an `if` decision (*"Is n <= 1 true? (n = 5)"*), it stops and shows the question with **Yes** / **No** buttons.
+3. Let students answer, then click **Yes** / **No** (or press **Y** / **N**). AlgoScope shows **✓ Correct!** or
+   **✗ Not this time**, the score for this run (*3 of 4 right so far*), and what really happened.
+4. Press Play or Next to continue to the next question.
+
+Loop checks (*"is i < n true?"*) are not asked, because they repeat every round. In Key steps mode, Predict also
+stops on the `if` decisions that Key steps would otherwise skip.
 
 ## Settings
 

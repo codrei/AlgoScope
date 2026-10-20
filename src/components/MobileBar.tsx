@@ -1,7 +1,8 @@
 // Phones: the controls live in one bar at the bottom of the screen, where the thumb is.
 // Code view: a big Run button. Watch view: where we are, a scrubber, Back / Play / Next and settings.
 import { ChevronLeft, ChevronRight, Loader2, Pause, Play, Settings, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useDialogFocus } from '../lib/useDialogFocus';
 
 interface BarProps {
   view: 'code' | 'watch';
@@ -74,6 +75,8 @@ interface SheetProps {
 
 /** A panel that slides up from the bottom of the screen; tap outside or ✕ to close. */
 export function BottomSheet({ title, onClose, children }: SheetProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', esc);
@@ -81,7 +84,7 @@ export function BottomSheet({ title, onClose, children }: SheetProps) {
   }, [onClose]);
   return (
     <div className="m-sheet-backdrop" onClick={onClose}>
-      <div className="m-sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className="m-sheet" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="m-sheet-head">
           <h2>{title}</h2>
           <button className="m-icon" onClick={onClose} aria-label="Close">

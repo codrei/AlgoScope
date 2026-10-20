@@ -1,5 +1,6 @@
 import { Loader2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import type { Lang } from '../engine/ir';
 import { EXAMPLES, type Example } from '../examples';
 import { growthFn, labKind, measure, SIZES, type CaseKind, type Measurement } from '../lib/complexity';
@@ -45,6 +46,8 @@ interface Props {
 }
 
 export function ComplexityLab({ example, lang, langLabel, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   const kind = labKind(example);
   const [data, setData] = useState<Record<CaseKind, Measurement[]> | null>(null);
   const [metric, setMetric] = useState<Metric>('compares');
@@ -83,7 +86,7 @@ export function ComplexityLab({ example, lang, langLabel, onClose }: Props) {
 
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className="dialog lab" role="dialog" aria-modal="true" aria-labelledby="lab-title" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="dialog lab" ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="lab-title" onMouseDown={(e) => e.stopPropagation()}>
         <button className="ghost-btn dialog-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
         <h2 id="lab-title">Complexity Lab</h2>
         {!kind ? (

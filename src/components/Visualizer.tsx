@@ -28,6 +28,8 @@ interface Props {
   moment?: string | null;
   quiz: { step: number; answer?: 'Yes' | 'No' } | null;
   onAnswer: (a: 'Yes' | 'No') => void;
+  /** Predict mode: answers so far in this run */
+  score?: { right: number; asked: number };
   locks: Map<number, LockInfo>;
   calls: Map<number, CallNode>;
   importance: Map<number, number>;
@@ -45,7 +47,7 @@ interface Props {
   phone?: boolean;
 }
 
-export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, moment, quiz, onAnswer, locks, calls, importance, gaps, mode, onMode, code, present, summary, onLab, phone }: Props) {
+export function Visualizer({ header, trace, stepIndex, position, viewTotal, caption, moment, quiz, onAnswer, score, locks, calls, importance, gaps, mode, onMode, code, present, summary, onLab, phone }: Props) {
   const step = trace?.steps[stepIndex];
   const prev = trace && stepIndex > 0 ? trace.steps[stepIndex - 1] : undefined;
   const isLast = !!trace && stepIndex === trace.steps.length - 1 && !trace.error;
@@ -55,7 +57,7 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
   // phones get three lines of code; an upright tablet has room for a real code panel
   const narrow = useMediaQuery(PHONE_QUERY);
   const card = step && (
-    <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} locks={locks} lean={phone}>
+    <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} score={score} locks={locks} lean={phone}>
       {isLast && step.kind === 'end' && <RunSummary trace={trace!} step={step} summary={summary ?? null} onLab={onLab} />}
     </StepCard>
   );
@@ -406,6 +408,22 @@ function Legend({ step, arrays, locks, stepIndex, isLast }: { step: Step; arrays
   );
 }
 
+/** "Is n <= 1 true?" → " (n = 5)": the values a student needs to answer an if-question */
+function valuesFor(question: string, step: Step): string {
+  const frames = [step.frames[step.frames.length - 1], step.frames[0]].filter(Boolean);
+  const names = [...new Set(question.match(/\b[A-Za-z_]\w*\b/g) ?? [])];
+  const parts = names
+    .flatMap((n) => {
+      for (const f of frames) {
+        const v = f.vars.find(([name]) => name === n)?.[1];
+        if (v) return v.t === 'p' ? [`${n} = ${v.s}`] : [];
+      }
+      return [];
+    })
+    .slice(0, 3);
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
 function StepCard(p: {
   step: Step;
   stepIndex: number;
@@ -415,17 +433,21 @@ function StepCard(p: {
   moment: string | null;
   quiz: { step: number; answer?: 'Yes' | 'No' } | null;
   onAnswer: (a: 'Yes' | 'No') => void;
+  /** Predict mode: answers so far in this run */
+  score?: { right: number; asked: number };
   locks: Map<number, LockInfo>;
   /** phones: one main sentence; the phase caption and the code-level sentence move out of the way */
   lean?: boolean;
   children?: ReactNode;
 }) {
-  const { step, stepIndex, position, total, caption, moment, quiz, onAnswer, locks, lean, children } = p;
+  const { step, stepIndex, position, total, caption, moment, quiz, onAnswer, score, locks, lean, children } = p;
   const [showCode, setShowCode] = useState(false);
   const m = /^(.*?\?) (Yes|No)\b/.exec(step.say);
   // Predict asks the idea version of the question when there is one ("is 5 bigger than 1?")
   const mq = moment ? /^(.*?\?) (Yes|No)\b/.exec(moment) : null;
-  const question = mq && m && mq[2] === m[2] ? mq[1] : m?.[1];
+  // a decision or loop check: just the question ("Add 1 to i (now 3). Is i < n true?" → "Is i < n true?"), with the values
+  const checkQ = m && step.kind === 'check' ? m[1].replace(/^.*\.\s+(?=[^.]*\?$)/, '') : null;
+  const question = mq && m && mq[2] === m[2] ? mq[1] : checkQ ? checkQ + valuesFor(checkQ, step) : m?.[1];
   if (quiz && m && !quiz.answer) {
     return (
       <div className="step-card quiz" role="status" aria-live="polite">
@@ -459,7 +481,11 @@ function StepCard(p: {
       </div>
       {caption && !(lean && moment) && <p className="step-caption">{caption}</p>}
       {verdict && (
-        <p className={`quiz-verdict ${verdict}`}>{verdict === 'right' ? '✓ Correct!' : `✗ Not this time: the answer is ${m![2]}.`}</p>
+        <p className={`quiz-verdict ${verdict}`}>
+          {verdict === 'right' ? '✓ Correct!' : `✗ Not this time: the answer is ${m![2]}.`}
+          {score && score.asked > 0 && <span className="quiz-score"> {score.right} of {score.asked} right so far.</span>}
+          <span className="quiz-next"> Press Play or Next to go on.</span>
+        </p>
       )}
       {moment ? (
         <>

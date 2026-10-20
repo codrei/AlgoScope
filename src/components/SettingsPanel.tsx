@@ -1,7 +1,8 @@
 // Settings: every way to customize AlgoScope in one place, saved on this device.
 // Laptops get a dialog; phones and upright tablets get a panel that slides up from the bottom.
 import { Check, Download, Minus, Plus, RotateCcw, Share, X } from 'lucide-react';
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import { promptInstall, useInstall } from '../lib/install';
 import { BottomSheet } from './MobileBar';
 import { SPEEDS } from './Playback';
@@ -173,7 +174,7 @@ export function SettingsPanel({ prefs, onChange, onZoom, onReset, onClose, touch
           value={prefs.predict}
           options={[[false, 'Off'], [true, 'Ask me first']]}
           onChange={(v) => onChange('predict', v)}
-          hint="Pauses before each comparison so you (or the class) can guess the answer."
+          hint="Stops before each comparison and if-decision so you (or the class) can guess Yes or No. Then press Play or Next."
         />
       </section>
   );
@@ -252,14 +253,21 @@ export function SettingsPanel({ prefs, onChange, onZoom, onReset, onClose, touch
       </BottomSheet>
     );
   }
+  return <SettingsDialog onClose={onClose}>{body}</SettingsDialog>;
+}
+
+/** laptops: a dialog in the middle of the screen */
+function SettingsDialog({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref);
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className="dialog settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="dialog settings" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(e) => e.stopPropagation()}>
         <button className="ghost-btn dialog-close" onClick={onClose} aria-label="Close">
           <X size={16} />
         </button>
         <h2 id="settings-title">Settings</h2>
-        {body}
+        {children}
       </div>
     </div>
   );

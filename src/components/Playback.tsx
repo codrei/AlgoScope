@@ -103,7 +103,7 @@ export function Playback({ index, total, playing, speed, onIndex, onPlay, onSpee
         className={`predict-btn ${predict ? 'active' : ''}`}
         onClick={() => onPredict(!predict)}
         aria-pressed={predict}
-        title="Predict mode: pause before each comparison so the class can guess the answer"
+        title="Predict mode: then press Play or Next. The run stops before each comparison and if-decision so you or the class can guess Yes or No"
       >
         <HelpCircle size={15} /> Predict
       </button>

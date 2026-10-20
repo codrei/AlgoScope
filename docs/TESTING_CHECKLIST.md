@@ -77,7 +77,8 @@ That's how we find unsupported features before the professor does.
 4. **Data structures (1 min):** Linked List: stop during `reverse` and point at prev / cur / next. Then BST.
 5. **Recursion and DP (1 min):** recursive Fibonacci (recursion tree, 15 calls), then Fibonacci DP table and
    Knapsack: the dashed cells show what each new value was built from.
-6. **Predict (30 s):** turn on Predict, let the audience guess one comparison, answer with Y / N.
+6. **Predict (30 s):** turn on Predict (Bubble Sort, or Factorial for an `if` question), then press **Play**. It
+   stops at the first question; let the audience guess, answer with Y / N, then press Play again.
 7. **Complexity (1 min):** open the Complexity Lab on Bubble Sort, show the n² curve, then the bar chart
    comparing all sorts.
 8. **Own code (30 s):** paste a function from a slide (no `main()`), Run, then press **Add a main() for me**.

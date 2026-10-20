@@ -1,7 +1,10 @@
 import { X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useDialogFocus } from '../lib/useDialogFocus';
 
 export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', esc);
@@ -9,7 +12,7 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
   }, [onClose]);
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="help-title" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="dialog" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="help-title" onMouseDown={(e) => e.stopPropagation()}>
         <button className="ghost-btn dialog-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
         <h2 id="help-title">How to use AlgoScope</h2>
         {phone && (
@@ -61,7 +64,9 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
         </ul>
         <h3>Predict mode</h3>
         <ul>
-          <li>Turn on <b>Predict</b> in the playback bar to pause before every comparison and let the class guess. Answer with <b>Yes</b> / <b>No</b> or the <kbd>Y</kbd> / <kbd>N</kbd> keys.</li>
+          <li>Turn on <b>Predict</b> in the playback bar, then press <b>Play</b> or <b>Next</b>. Turning it on does not change the screen by itself: the run stops when it reaches the next comparison (“is 5 bigger than 1?”) or <code>if</code> decision (“is n &lt;= 1 true?”) and asks you or the class to guess.</li>
+          <li>Answer with <b>Yes</b> / <b>No</b> or the <kbd>Y</kbd> / <kbd>N</kbd> keys. AlgoScope says whether the guess was right, keeps a score for the run, and shows what happened. Press Play or Next to go on.</li>
+          <li>Loop checks (“is i &lt; n true?”) are not asked, because they repeat every round.</li>
         </ul>
         <h3>Settings and installing</h3>
         <ul>

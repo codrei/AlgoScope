@@ -151,7 +151,7 @@ test('predict mode asks before each comparison and checks the answer', async ({ 
   }
   await expect(page.locator('.step-card.quiz .step-say')).toHaveText('Compare the neighbors 5 and 1: is 5 bigger?');
   await page.keyboard.press('y');
-  await expect(page.locator('.quiz-verdict')).toHaveText('✓ Correct!');
+  await expect(page.locator('.quiz-verdict')).toHaveText('✓ Correct! 1 of 1 right so far. Press Play or Next to go on.');
   await expect(page.locator('.step-say')).toContainText('Yes, they are in the wrong order, so they swap');
   await expect(page.locator('.step-say-code')).toContainText('Yes, so the code inside the if runs');
   // the next comparison asks again; a wrong answer is explained
@@ -160,6 +160,58 @@ test('predict mode asks before each comparison and checks the answer', async ({ 
   }
   await page.getByRole('button', { name: /^No/ }).click();
   await expect(page.locator('.quiz-verdict')).toContainText('Not this time');
+  await expect(page.locator('.quiz-verdict')).toContainText('1 of 2 right so far');
+});
+
+test('turning Predict on says what will happen, and Play stops at the first question', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&lang=cpp&run=1&step=0');
+  await expect(page.locator('.step-count')).toHaveText(/^1 \/ \d+$/); // the run is ready
+  await page.getByRole('button', { name: /Predict/ }).click();
+  await expect(page.locator('.toast')).toContainText('Predict is on: the run will stop before each of its');
+  await expect(page.locator('.toast')).toContainText('Press Play or Next');
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.locator('.step-card.quiz')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible(); // paused, waiting for the answer
+  await page.getByRole('button', { name: /Predict/ }).click();
+  await expect(page.locator('.toast')).toHaveText('Predict is off.');
+});
+
+test('Predict also asks at if-decisions, so recursion examples have questions', async ({ page }) => {
+  await fresh(page, '?example=factorial&lang=python&run=1&step=0');
+  await expect(page.locator('.step-count')).toHaveText(/^1 \/ \d+$/); // the run is ready
+  await page.getByRole('button', { name: /Predict/ }).click();
+  await expect(page.locator('.toast')).toContainText(/each of its [1-9]\d* comparisons and decisions/);
+  for (let i = 0; i < 15 && !(await page.locator('.step-card.quiz').count()); i++) {
+    await page.getByRole('button', { name: 'Next step' }).click();
+  }
+  await expect(page.locator(".step-card.quiz .step-say")).toHaveText("Is n <= 1 true? (n = 5)");
+  await page.getByRole('button', { name: /^No/ }).click();
+  await expect(page.locator('.quiz-verdict')).toContainText('✓ Correct!');
+});
+
+test('a run with only loops (Euclid) asks the loop checks', async ({ page }) => {
+  await fresh(page, '?example=gcd&lang=java&run=1&step=0');
+  await expect(page.locator('.step-count')).toHaveText(/^1 \/ \d+$/); // the run is ready
+  await page.getByRole('button', { name: /Predict/ }).click();
+  for (let i = 0; i < 15 && !(await page.locator('.step-card.quiz').count()); i++) {
+    await page.getByRole('button', { name: 'Next step' }).click();
+  }
+  await expect(page.locator('.step-card.quiz .step-say')).toHaveText(/^Is b != 0 true\? \(b = \d+\)$/);
+});
+
+test('keys do not move the run behind an open panel', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&lang=cpp&run=1&step=0');
+  await expect(page.locator('.step-count')).toHaveText(/^1 \//);
+  for (const name of ['Settings', 'Help']) {
+    await page.getByRole('button', { name }).click();
+    await expect(page.getByRole('dialog')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('End');
+    await page.keyboard.press(' ');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.step-count')).toHaveText(/^1 \//);
+    await expect(page.getByRole('button', { name })).toBeFocused(); // focus goes back to the button
+  }
 });
 
 test('playback controls fit on one row on a 1366px laptop', async ({ page }) => {
