@@ -14,5 +14,11 @@ export function useMediaQuery(query: string): boolean {
   return match;
 }
 
-/** Phones: the layout with separate Code and Watch views and controls at the bottom. */
+/** Phones: narrow screens. */
 export const PHONE_QUERY = '(max-width: 699px)';
+
+/**
+ * The touch layout (separate Code and Watch views, controls at the bottom): phones, and tablets
+ * held upright. A laptop window is never in it unless it is as narrow as a phone.
+ */
+export const COMPACT_QUERY = '(max-width: 699px), (max-width: 1100px) and (orientation: portrait) and (pointer: coarse)';

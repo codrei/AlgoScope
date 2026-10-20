@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Info, Layers, Terminal } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { FrameSnap, SnapVal, Step, Trace } from '../engine/trace';
 import { lockedCells, recursionRoot, structuresFor, type CallNode, type LockInfo, type StructRef } from '../lib/analysis';
+import { PHONE_QUERY, useMediaQuery } from '../lib/useMedia';
 import { ArrayView, cellText, rolesFor } from './ArrayView';
 import { GraphView, Grid2D, HeapTree, isAdjacencyMatrix, MapView, MatrixGraphView, RecursionTree } from './Structures';
 
@@ -51,6 +52,8 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
   const beginner = mode === 'beginner';
   const short = useShortScreen();
   const [about, setAbout] = useState(false);
+  // phones get three lines of code; an upright tablet has room for a real code panel
+  const narrow = useMediaQuery(PHONE_QUERY);
   const card = step && (
     <StepCard step={step} stepIndex={stepIndex} position={position} total={viewTotal} caption={caption} moment={moment ?? null} quiz={quiz} onAnswer={onAnswer} locks={locks} lean={phone}>
       {isLast && step.kind === 'end' && <RunSummary trace={trace!} step={step} summary={summary ?? null} onLab={onLab} />}
@@ -109,7 +112,7 @@ export function Visualizer({ header, trace, stepIndex, position, viewTotal, capt
           <Stage step={step} prev={prev} stepIndex={stepIndex} locks={locks} calls={calls} importance={importance} gaps={gaps} isLast={isLast} beginner={beginner} />
           {/* phones: the explanation right under the picture, then the code lines */}
           {card}
-          {phone && code && <MiniCode code={code} line={step.ln} />}
+          {phone && code && (narrow ? <MiniCode code={code} line={step.ln} /> : <div className="m-code-tablet"><CodePanel code={code} line={step.ln} /></div>)}
           {phone ? (
             <>
               <OutputBox trace={trace!} step={step} compact />
@@ -324,7 +327,7 @@ function FitToView({ children }: { children: ReactNode }) {
       const h = i.offsetHeight; // layout height, not affected by the transform
       setNatural(h);
       let target = 1;
-      const phoneMain = window.innerWidth < 700 ? (o.closest('.main.phone') as HTMLElement | null) : null;
+      const phoneMain = o.closest('.main.phone') as HTMLElement | null;
       if (phoneMain && h > 0) {
         // phones: the page scrolls; keep the top of the explanation in view above the bottom bar
         const card = o.parentElement?.querySelector(':scope > .step-card') as HTMLElement | null;

@@ -14,7 +14,7 @@ import { buildCallTree, computeGaps, computeImportance, computeLocks, keySteps, 
 import { captionFor, momentFor, runInfo } from './lib/captions';
 import { chapterPositions, chaptersFor } from './lib/chapters';
 import { labKind } from './lib/complexity';
-import { PHONE_QUERY, useMediaQuery } from './lib/useMedia';
+import { COMPACT_QUERY, useMediaQuery } from './lib/useMedia';
 
 const BASE = import.meta.env.BASE_URL;
 configureEngine({
@@ -101,7 +101,7 @@ export default function App() {
   const [quiz, setQuiz] = useState<{ step: number; answer?: 'Yes' | 'No' } | null>(null);
   const [keyOnly, setKeyOnly] = useState(() => load('as.keyOnly', true));
   // phones: separate Code and Watch views, controls at the bottom
-  const phone = useMediaQuery(PHONE_QUERY);
+  const phone = useMediaQuery(COMPACT_QUERY);
   const [mview, setMview] = useState<'code' | 'watch'>(() => (P.run || P.present ? 'watch' : 'code'));
   const [settings, setSettings] = useState(false);
   const [mode, setMode] = useState<ViewMode>(() => (params.get('mode') === 'detailed' ? 'detailed' : load<ViewMode>('as.mode', 'beginner')));
@@ -356,6 +356,7 @@ export default function App() {
         onHelp={() => setHelp(true)}
         onLab={() => setLab(true)}
         onZoom={(d) => setZoom((z: number) => Math.min(1.8, Math.max(0.7, Math.round((z + d * 0.1) * 10) / 10)))}
+        compact={phone}
       />
       {phone && (
         <div className="m-switch" role="tablist" aria-label="View">

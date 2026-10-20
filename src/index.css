@@ -2921,3 +2921,112 @@ input[type='range'] {
     padding-right: max(8px, env(safe-area-inset-right));
   }
 }
+
+/* ===================================================================== tablets
+   Upright: the touch layout from above, with the controls kept to a comfortable width.
+   Sideways: the laptop layout, with touch-sized controls. */
+@media (min-width: 700px) {
+  .m-switch,
+  .m-bar > * {
+    max-width: 680px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .m-switch {
+    width: calc(100% - 40px);
+  }
+
+  .m-switch {
+    margin-top: 10px;
+  }
+
+  .main.phone {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .main.phone .viz-scroll {
+    padding: 20px 24px 22px;
+  }
+
+  .main.phone .step-say {
+    font-size: 19px;
+  }
+
+  .m-header h1 {
+    font-size: 26px;
+  }
+
+  .m-code-tablet .present-code {
+    max-height: 34vh;
+    font-size: 15px;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 700px) {
+  .topbar-btn,
+  .lang-tabs button,
+  .editor-panel .ghost-btn,
+  .run-btn,
+  .pb-btn,
+  .predict-btn,
+  .speed {
+    min-height: 44px;
+  }
+
+  .topbar-btn {
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .step-mode button,
+  .mode-toggle button,
+  .seg button {
+    min-height: 40px;
+  }
+
+  .menu-item {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .code-toggle,
+  .stdin-toggle {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* the parts bar: thin bars, but a finger-sized place to tap */
+  .ch-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ch-track {
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .ch-seg {
+    height: 34px;
+    padding: 10px 0;
+    background-clip: content-box;
+  }
+
+  .ch-seg.current {
+    outline: none;
+  }
+}
+
+/* touch screens in the laptop layout (tablets held sideways): scrolling is natural on touch,
+   covering the picture is not, so the explanation sits below the picture instead of pinned over it */
+@media (pointer: coarse) {
+  .viz-scroll > .step-card,
+  .present-main > .step-card {
+    position: static;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+}

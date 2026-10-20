@@ -30,6 +30,8 @@ interface Props {
   onHelp: () => void;
   onLab: () => void;
   onZoom: (d: number) => void;
+  /** touch layout (phones, upright tablets): no Present mode or text-size buttons there */
+  compact?: boolean;
 }
 
 export function TopBar(p: Props) {
@@ -116,11 +118,11 @@ export function TopBar(p: Props) {
         <TrendingUp size={16} /> <span className="label">Complexity</span>
       </button>
       <div className="topbar-spacer" />
-      <button className="topbar-btn hide-sm" onClick={() => p.onZoom(-1)} title="Smaller text" aria-label="Smaller text"><Minus size={16} /></button>
-      <button className="topbar-btn hide-sm" onClick={() => p.onZoom(1)} title="Bigger text (for projectors)" aria-label="Bigger text"><Plus size={16} /></button>
-      <button className={`topbar-btn hide-sm ${p.present ? 'active' : ''}`} onClick={p.onPresent} title="Present mode: big visualization with the code underneath">
+      {!p.compact && <button className="topbar-btn hide-sm" onClick={() => p.onZoom(-1)} title="Smaller text" aria-label="Smaller text"><Minus size={16} /></button>}
+      {!p.compact && <button className="topbar-btn hide-sm" onClick={() => p.onZoom(1)} title="Bigger text (for projectors)" aria-label="Bigger text"><Plus size={16} /></button>}
+      {!p.compact && (<button className={`topbar-btn hide-sm ${p.present ? 'active' : ''}`} onClick={p.onPresent} title="Present mode: big visualization with the code underneath">
         <Monitor size={16} /> <span className="label">Present</span>
-      </button>
+      </button>)}
       <button className="topbar-btn" onClick={p.onDark} title={p.dark ? 'Light theme' : 'Dark theme'} aria-label="Toggle theme">
         {p.dark ? <Sun size={16} /> : <Moon size={16} />}
       </button>

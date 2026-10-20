@@ -98,3 +98,29 @@ test('Help explains the phone controls', async ({ page }) => {
   await page.locator('.dialog-close').tap();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test.describe('tablets', () => {
+  test.use({ viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true });
+
+  test('upright: the touch layout with a real code panel, nothing covered', async ({ page }) => {
+    await fresh(page, '?example=heap-sort&lang=java&run=1&step=40');
+    await expect(page.getByRole('tab', { name: 'Watch' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.m-code-tablet .pc-line.active')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /Present/ })).toHaveCount(0);
+    const l = await layout(page);
+    expect(l.overlap).toBe(0);
+    expect(l.sideways).toBe(0);
+  });
+});
+
+test.describe('tablets held sideways', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, isMobile: true, hasTouch: true });
+
+  test('the laptop layout, but the explanation never covers the picture', async ({ page }) => {
+    await fresh(page, '?example=heap-sort&lang=java&run=1&step=40');
+    await expect(page.locator('.playback')).toBeVisible();
+    const l = await layout(page);
+    expect(l.overlap).toBe(0);
+    expect(l.sideways).toBe(0);
+  });
+});
