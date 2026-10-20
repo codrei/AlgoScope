@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
 
-export function HelpDialog({ onClose }: { onClose: () => void }) {
+export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: boolean }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', esc);
@@ -12,6 +12,18 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="help-title" onMouseDown={(e) => e.stopPropagation()}>
         <button className="ghost-btn dialog-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
         <h2 id="help-title">How to use AlgoScope</h2>
+        {phone && (
+          <>
+            <h3>On your phone</h3>
+            <ul>
+              <li><b>Code</b> and <b>Watch</b> at the top switch between writing the program and watching it run. Pick a ready-made example from the menu at the very top.</li>
+              <li>Press the yellow <b>Run</b> button at the bottom. AlgoScope switches to <b>Watch</b> by itself.</li>
+              <li>The bar at the bottom moves through the run: <b>Back</b>, <b>Play</b> and <b>Next</b>, or drag the slider. Above it you see which part of the algorithm you are in (for example <i>Pass 2 of 5</i>).</li>
+              <li>Under the picture: what just happened, then the line of code that ran. Tap the code to see the whole program.</li>
+              <li>The <b>⚙</b> button sets the speed, Key steps or Every line, and Predict mode.</li>
+            </ul>
+          </>
+        )}
         <p>
           AlgoScope runs your C, C++, Java, C# or Python code one line at a time and shows what it does: the line that is
           running, the variables, the call stack, and pictures of your arrays, lists, stacks, queues, trees and tables.

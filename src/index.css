@@ -2761,6 +2761,16 @@ input[type='range'] {
     min-width: 44px;
   }
 
+  /* one row: the language tabs and an icon-only Reset */
+  .editor-panel .reset-label {
+    display: none;
+  }
+
+  .editor-panel .lang-tabs button {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
   .code-toggle,
   .stdin-toggle {
     min-height: 44px;
@@ -2784,4 +2794,130 @@ input[type='range'] {
 
 @media (prefers-reduced-motion: reduce) {
   .m-sheet { animation: none; }
+}
+
+/* phones: the examples menu, Help and the Complexity Lab fill the screen */
+.m-full-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 6px 16px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.m-full-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+}
+
+.m-full-title h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.m-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.m-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px; /* 16px or more: iPhones do not zoom in when the box is tapped */
+}
+
+.m-empty {
+  margin: 20px 16px;
+  color: var(--text-3);
+}
+
+@media (max-width: 699px) {
+  .menu.m-full {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    width: auto;
+    max-height: none;
+    height: 100dvh;
+    margin: 0;
+    padding: 0 0 calc(16px + env(safe-area-inset-bottom));
+    border: none;
+    border-radius: 0;
+    overflow-y: auto;
+    box-shadow: none;
+    columns: auto;
+    display: block;
+  }
+
+  .menu.m-full .menu-group {
+    padding: 0 10px;
+    break-inside: auto;
+  }
+
+  .menu.m-full .menu-group h4 {
+    margin: 14px 8px 4px;
+    font-size: 12px;
+  }
+
+  .menu.m-full .menu-item {
+    min-height: 48px;
+    align-items: center;
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+
+  .dialog-backdrop {
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    padding: 18px 16px calc(28px + env(safe-area-inset-bottom));
+  }
+
+  .dialog.lab {
+    max-width: none;
+  }
+
+  /* the close button stays reachable while the panel scrolls */
+  .dialog-close {
+    position: sticky;
+    top: 0;
+    float: right;
+    z-index: 3;
+    width: 44px;
+    height: 44px;
+    background: var(--surface);
+  }
+
+  .lab-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* landscape phones: keep clear of the notch */
+  .topbar,
+  .m-bar,
+  .main.phone {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
 }

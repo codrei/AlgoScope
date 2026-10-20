@@ -396,7 +396,8 @@ export default function App() {
             stdin={stdin}
             onStdin={setStdin}
             dark={dark}
-            fontSize={Math.round(14 * zoom)}
+            fontSize={phone ? 16 : Math.round(14 * zoom)}
+            wrap={phone}
           />
         )}
         <section className="panel viz" aria-label="Visualization">
@@ -424,7 +425,7 @@ export default function App() {
       {phone && settings && (
         <PlaybackSettings onClose={() => setSettings(false)} keyOnly={keyOnly} onKeyOnly={setKeyOnly} predict={predict} onPredict={setPredict} speed={speed} onSpeed={setSpeed} />
       )}
-      {help && <HelpDialog onClose={() => setHelp(false)} />}
+      {help && <HelpDialog onClose={() => setHelp(false)} phone={phone} />}
       {lab && <ComplexityLab example={example} lang={lang} langLabel={LANGS.find((l) => l.id === lang)!.label} onClose={() => setLab(false)} />}
     </div>
   );

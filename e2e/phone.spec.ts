@@ -79,3 +79,22 @@ test('the Code view gives the editor the screen and keeps Run at the bottom', as
   expect(l.small).toEqual([]);
   expect(l.sideways).toBe(0);
 });
+
+test('the examples panel fills the screen and can be searched', async ({ page }) => {
+  await fresh(page);
+  await page.locator('.topbar .menu-wrap > .topbar-btn').tap();
+  const menu = await page.locator('.menu').boundingBox();
+  expect(menu!.width).toBeGreaterThanOrEqual(389);
+  await page.getByRole('searchbox', { name: 'Search examples' }).fill('dijkstra');
+  await expect(page.getByRole('menuitem')).toHaveCount(1);
+  await page.getByRole('menuitem', { name: /Dijkstra/ }).tap();
+  await expect(page.locator('.viz-header h1')).toHaveText("Dijkstra's Shortest Path");
+});
+
+test('Help explains the phone controls', async ({ page }) => {
+  await fresh(page);
+  await page.getByRole('button', { name: 'Help' }).tap();
+  await expect(page.getByRole('heading', { name: 'On your phone' })).toBeVisible();
+  await page.locator('.dialog-close').tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

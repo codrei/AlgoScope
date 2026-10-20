@@ -35,6 +35,8 @@ interface Props {
   onStdin: (s: string) => void;
   dark: boolean;
   fontSize: number;
+  /** phones: wrap long lines instead of scrolling sideways */
+  wrap?: boolean;
 }
 
 export function EditorPane(p: Props) {
@@ -99,8 +101,8 @@ export function EditorPane(p: Props) {
             </button>
           ))}
         </div>
-        <button className="ghost-btn" onClick={p.onReset} title="Restore the example's original code">
-          <RotateCcw size={15} /> Reset
+        <button className="ghost-btn" aria-label="Reset" onClick={p.onReset} title="Restore the example's original code">
+          <RotateCcw size={15} /> <span className="reset-label">Reset</span>
         </button>
         <button className="run-btn" onClick={p.onRun} disabled={p.running} title="Run (Ctrl+Enter)">
           {p.running ? <Loader2 size={17} className="spin" /> : <Play size={17} fill="currentColor" />} Run
@@ -120,6 +122,7 @@ export function EditorPane(p: Props) {
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             automaticLayout: true,
+            wordWrap: p.wrap ? 'on' : 'off',
             tabSize: 4,
             glyphMargin: false,
             lineNumbersMinChars: 3,

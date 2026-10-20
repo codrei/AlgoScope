@@ -1,6 +1,7 @@
-import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Sun, TrendingUp } from 'lucide-react';
+import { BookOpen, ChevronDown, CircleHelp, Minus, Monitor, Moon, Plus, Search, Sun, TrendingUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { EXAMPLES, type Example, type Topic } from '../examples';
+import { PHONE_QUERY, useMediaQuery } from '../lib/useMedia';
 
 const LANG_LABEL = { c: 'C', cpp: 'C++', java: 'Java', csharp: 'C#', python: 'Python' } as const;
 const TOPICS: Topic[] = [
@@ -34,6 +35,11 @@ interface Props {
 export function TopBar(p: Props) {
   const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).get('menu') === '1');
   const wrap = useRef<HTMLDivElement>(null);
+  // phones: the menu is a full-screen panel with a search box
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const matches = (e: Example) => !q || `${e.title} ${e.topic} ${e.description}`.toLowerCase().includes(q);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -63,9 +69,24 @@ export function TopBar(p: Props) {
           <BookOpen size={16} /> <span className="label keep">{current ? current.title : 'Examples'}</span> <ChevronDown size={15} />
         </button>
         {open && (
-          <div className="menu" role="menu">
+          <div className={`menu ${phone ? 'm-full' : ''}`} role="menu">
+            {phone && (
+              <div className="m-full-head">
+                <div className="m-full-title">
+                  <h2>Examples</h2>
+                  <button className="m-icon" onClick={() => setOpen(false)} aria-label="Close examples">
+                    <X size={20} />
+                  </button>
+                </div>
+                <label className="m-search">
+                  <Search size={17} />
+                  <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search: sort, stack, graph, DP…" aria-label="Search examples" />
+                </label>
+              </div>
+            )}
+            {phone && q && !EXAMPLES.some(matches) && <p className="m-empty">No example matches “{query}”.</p>}
             {TOPICS.map((t) => {
-              const items = EXAMPLES.filter((e) => e.topic === t);
+              const items = EXAMPLES.filter((e) => e.topic === t && (!phone || matches(e)));
               if (!items.length) return null;
               return (
                 <div className="menu-group" key={t}>
@@ -78,6 +99,7 @@ export function TopBar(p: Props) {
                       onClick={() => {
                         p.onExample(e);
                         setOpen(false);
+                        setQuery('');
                       }}
                     >
                       <span>{e.title}</span>
