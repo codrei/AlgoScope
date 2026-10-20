@@ -29,6 +29,8 @@ It is built for teaching **Data Structures & Algorithms** and **Algorithms & Com
   adds a `main()` for slides that show only a function
 - Console screen for Turbo C programs (`gotoxy`, `getch` with arrow keys)
 - Present mode for projectors (checked at 1080p, 768p, 720p and 1024×768), dark/light theme, adjustable text size
+- A touch layout for phones and upright tablets: separate Code and Watch views, the picture never covered, one
+  scrolling page, controls at the bottom (with swipe), full-screen examples with search
 - Clear messages for student mistakes (index out of bounds, null pointer, endless loop, missing indent...)
 - Runs fully in the browser, so no server and no installation are needed
 

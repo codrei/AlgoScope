@@ -333,6 +333,35 @@ export default function App() {
   const step = trace?.steps[stepIndex];
   const atEnd = !!trace && stepIndex === trace.steps.length - 1;
   // phones never use Present mode or Full detail: one calm column
+  // touch layout: swipe the picture left for the next step, right for the step before
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const el = e.target as HTMLElement;
+    // leave alone anything that scrolls sideways by itself (wide graphs, tables, the code)
+    let n: HTMLElement | null = el;
+    while (n && !n.classList.contains('viz')) {
+      if (n.scrollWidth > n.clientWidth + 4 && /(auto|scroll)/.test(getComputedStyle(n).overflowX)) {
+        swipe.current = null;
+        return;
+      }
+      n = n.parentElement;
+    }
+    if (el.closest('button, input, textarea, select, summary, .present-code, .m-code')) {
+      swipe.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    swipe.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s0 = swipe.current;
+    swipe.current = null;
+    if (!s0 || !trace) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s0.x;
+    const dy = t.clientY - s0.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.6 * Math.abs(dy) && Date.now() - s0.t < 700) goto(pos + (dx < 0 ? 1 : -1));
+  };
   const isPresent = present && !phone;
   const viewMode: ViewMode = phone ? 'beginner' : mode;
   useEffect(() => {
@@ -401,7 +430,7 @@ export default function App() {
             wrap={phone}
           />
         )}
-        <section className="panel viz" aria-label="Visualization">
+        <section className="panel viz" aria-label="Visualization" onTouchStart={phone ? onTouchStart : undefined} onTouchEnd={phone ? onTouchEnd : undefined}>
           <div className="viz-scroll" style={phone ? undefined : { zoom }}>
             {phone && stale && !compileError && (
               <div className="notice m-stale">

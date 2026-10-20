@@ -15,6 +15,14 @@ after an update).
   - `https://codrei.github.io/AlgoScope/?example=heap-sort&lang=java&run=1&present=1`
   - `https://codrei.github.io/AlgoScope/?example=quick-sort&lang=cpp&lab=1`
 
+## Phone check (3 minutes, on a real phone)
+
+- [ ] Open the site: the **Code** tab shows the editor and a yellow **Run** button at the bottom.
+- [ ] Press Run: it switches to **Watch**; the picture is at the top and nothing covers it.
+- [ ] Back / Play / Next at the bottom work, and swiping the picture left / right steps too.
+- [ ] Open the examples menu (top), search "stack", pick one; the ⚙ button changes the speed.
+- [ ] Turn a tablet sideways and back: the layout switches and the step stays the same.
+
 ## Quick check (10 minutes)
 
 - [ ] The page opens and shows **Bubble Sort**.

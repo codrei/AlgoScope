@@ -48,6 +48,22 @@ The explanation box stays pinned at the bottom of the panel, so it is visible ev
   Big-O means when the input doubles, with a button into the Complexity Lab. When a sort finishes, the cells bounce
   once, left to right.
 
+## On a phone or tablet
+
+Phones (and tablets held upright) get a layout made for touch:
+
+- **Code** and **Watch** at the top switch between writing the program and watching it run. Pressing **Run**
+  (the yellow button at the bottom) switches to Watch by itself; a compile error stays in Code, where it is shown.
+- **Watch** shows the picture first, then what just happened, then the line of code that ran with one line before
+  and after it (tap it for the whole program). On a tablet a larger code panel shows about ten lines. Nothing is
+  ever drawn on top of the picture, and the whole page scrolls as one.
+- **The bar at the bottom** has Back, Play and Next, a slider, and the part of the algorithm you are in. You can
+  also **swipe** the picture left for the next step and right for the step before. The **⚙** button sets the
+  speed, Key steps or Every line, and Predict mode.
+- **Examples** open full screen with a search box; Help and the Complexity Lab also fill the screen.
+- Tablets held sideways keep the laptop layout with finger-sized controls; there the explanation sits under the
+  picture. For watching on a sideways tablet, **Present** mode works well.
+
 ## Predict mode (for class discussion)
 
 Turn on **Predict** in the playback bar. Before every comparison the animation stops and asks the class, for

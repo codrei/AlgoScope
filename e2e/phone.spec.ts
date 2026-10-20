@@ -124,3 +124,45 @@ test.describe('tablets held sideways', () => {
     expect(l.sideways).toBe(0);
   });
 });
+
+/** a real finger swipe on the screen, from (x1, y) to (x2, y) */
+async function swipeAt(page: Page, x1: number, x2: number, y: number) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x1, y }] });
+  for (let k = 1; k <= 5; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x1 + ((x2 - x1) * k) / 5, y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+test('swiping the picture steps forward and back', async ({ page }) => {
+  await fresh(page, '?example=bubble-sort&lang=cpp&run=1&step=0');
+  await expect(page.locator('.m-count')).toHaveText(/^1 \//);
+  const stage = await page.locator('.stage').boundingBox();
+  const y = stage!.y + stage!.height / 2;
+  await swipeAt(page, 320, 80, y);
+  await expect(page.locator('.m-count')).toHaveText(/^2 \//);
+  await swipeAt(page, 320, 80, y);
+  await expect(page.locator('.m-count')).toHaveText(/^3 \//);
+  await swipeAt(page, 80, 320, y);
+  await expect(page.locator('.m-count')).toHaveText(/^2 \//);
+});
+
+test.describe('turning a tablet', () => {
+  test.use({ viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true });
+
+  test('switches layouts and keeps the step', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await fresh(page, '?example=insertion-sort&lang=java&run=1&step=20');
+    await expect(page.locator('.step-say').first()).toBeVisible();
+    await expect(page.locator('.m-count')).toHaveText(/\d+ \/ \d+/);
+    const before = (await page.locator('.m-count').textContent())!.split('/')[0].trim();
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await expect(page.locator('.playback')).toBeVisible();
+    await expect(page.locator('.m-bar')).toHaveCount(0);
+    await expect(page.locator('.monaco-editor')).toBeVisible();
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await expect(page.locator('.m-bar')).toBeVisible();
+    expect((await page.locator('.m-count').textContent())!.split('/')[0].trim()).toBe(before);
+    expect(errors).toEqual([]);
+  });
+});

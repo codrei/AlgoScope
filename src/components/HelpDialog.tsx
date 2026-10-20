@@ -18,7 +18,7 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
             <ul>
               <li><b>Code</b> and <b>Watch</b> at the top switch between writing the program and watching it run. Pick a ready-made example from the menu at the very top.</li>
               <li>Press the yellow <b>Run</b> button at the bottom. AlgoScope switches to <b>Watch</b> by itself.</li>
-              <li>The bar at the bottom moves through the run: <b>Back</b>, <b>Play</b> and <b>Next</b>, or drag the slider. Above it you see which part of the algorithm you are in (for example <i>Pass 2 of 5</i>).</li>
+              <li>The bar at the bottom moves through the run: <b>Back</b>, <b>Play</b> and <b>Next</b>, or drag the slider. You can also <b>swipe</b> the picture left for the next step and right for the step before. Above the bar you see which part of the algorithm you are in (for example <i>Pass 2 of 5</i>).</li>
               <li>Under the picture: what just happened, then the line of code that ran. Tap the code to see the whole program.</li>
               <li>The <b>⚙</b> button sets the speed, Key steps or Every line, and Predict mode.</li>
             </ul>
