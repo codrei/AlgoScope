@@ -26,7 +26,23 @@ export class RuntimeErr extends Error {
   }
 }
 
-class StepLimit extends Error {}
+/**
+ * The run is stopped (not an error in the student's code): at 5,000 steps, or when the data saved for
+ * the animation gets too big for a phone or laptop (every step keeps a copy of the arrays it changed).
+ */
+class StepLimit extends Error {
+  reason: 'steps' | 'size';
+  constructor(reason: 'steps' | 'size' = 'steps') {
+    super(reason);
+    this.reason = reason;
+  }
+}
+
+/** the most values one array, list, vector or malloc may hold, and the longest string */
+export const MAX_CELLS = 1_000_000;
+export const MAX_TEXT = 1_000_000;
+/** the most values all the saved steps of one run may hold together (about 100 MB) */
+const SNAP_BUDGET = 3_000_000;
 
 /** A thrown exception object travelling up to the nearest matching catch. */
 export class Thrown extends Error {
@@ -214,6 +230,8 @@ export class Interp {
     return ch === '\n' ? 13 : ch.charCodeAt(0);
   }
   private heapCache = new Map<number, { ver: number; item: HeapItem }>();
+  /** values saved in the steps so far (see SNAP_BUDGET) */
+  private snapCells = 0;
   private globalIndexVars: Record<string, string[]>;
 
   constructor(prog: Program, opts: RunOptions = {}) {
@@ -232,6 +250,14 @@ export class Interp {
 
   get frame(): Frame {
     return this.frames[this.frames.length - 1] ?? this.global;
+  }
+
+  /** [0] * n, "ab" * n: too big is an error right away, before the browser runs out of memory */
+  private repeatChecked(v: Arr | string, n: number): Val {
+    const size = (typeof v === 'string' ? v.length : v.items.length) * Math.max(0, n);
+    if (typeof v === 'string' && size > MAX_TEXT) throw this.err(`string of ${size.toLocaleString('en-US')} characters is too long (the limit is 1,000,000)`);
+    if (typeof v !== 'string' && size > MAX_CELLS) throw this.err(`list of ${size.toLocaleString('en-US')} items is too large (the limit is 1,000,000)`);
+    return repeat(v, n);
   }
 
   err(msg: string): RuntimeErr {
@@ -308,21 +334,32 @@ export class Interp {
         this.invoke(fn, args, undefined);
       }
     } catch (e) {
+      // the error step saves the data too; if that is what was too big, the run just stops there
+      const finalStep = (ln: number, text: string, say: string) => {
+        try {
+          this.pushStep(ln, 'error', text, say);
+        } catch (e2) {
+          if (!(e2 instanceof StepLimit)) throw e2;
+          trace.truncated = true;
+          trace.truncatedBy = e2.reason;
+        }
+      };
       if (e instanceof StepLimit) {
         trace.truncated = true;
+        trace.truncatedBy = e.reason;
       } else if (e instanceof Thrown) {
         const msg = `uncaught ${e.obj.cls}: ${e.message}`;
         trace.error = { msg, line: e.line };
         this.silent = 0;
         if (this.errFrames) this.frames = this.errFrames;
-        this.pushStep(e.line, 'error', `ERROR: ${msg}`, `The ${e.obj.cls} thrown on line ${e.line} was not caught, so the program stops: ${e.message}`);
+        finalStep(e.line, `ERROR: ${msg}`, `The ${e.obj.cls} thrown on line ${e.line} was not caught, so the program stops: ${e.message}`);
       } else {
-        const msg = e instanceof RuntimeErr ? e.message : e instanceof Error ? e.message : String(e);
+        const msg = e instanceof RuntimeErr ? e.message : e instanceof RangeError && /Invalid (array|string) length/.test(e.message) ? 'this needs more memory than a browser has (a list or string is far too big)' : e instanceof Error ? e.message : String(e);
         const line = e instanceof RuntimeErr ? e.line : this.ln;
         trace.error = { msg, line };
         this.silent = 0;
         if (this.errFrames) this.frames = this.errFrames;
-        this.pushStep(line, 'error', `ERROR: ${msg}`, `Something went wrong on line ${line}: ${msg}`);
+        finalStep(line, `ERROR: ${msg}`, `Something went wrong on line ${line}: ${msg}`);
       }
     }
     trace.stdout = this.out;
@@ -450,11 +487,16 @@ export class Interp {
       const cached = this.heapCache.get(o.id);
       if (cached && cached.ver === o.version && !(o instanceof Obj)) {
         heap[o.id] = cached.item;
-        // children still need to be visited
-        if (o instanceof Arr) o.items.forEach((x) => this.snapVal(x, queue));
+        // children still need to be visited (only references lead anywhere)
+        if (o instanceof Arr) {
+          for (const x of o.items) if (x instanceof Arr || x instanceof Obj || x instanceof MapV || x instanceof Ptr) this.snapVal(x, queue);
+        }
         else if (o instanceof MapV) for (const [k, x] of o.entries.values()) { this.snapVal(k, queue); this.snapVal(x, queue); }
         continue;
       }
+      // a new copy of this array / object / map is saved: count it against the budget before making it
+      this.snapCells += o instanceof Arr ? o.items.length : o instanceof Obj ? o.fields.size : o.entries.size;
+      if (this.snapCells > SNAP_BUDGET) throw new StepLimit('size');
       let item: HeapItem;
       if (o instanceof Arr) item = { kind: 'arr', id: o.id, arrKind: o.kind, items: o.items.map(sv), heap: o.kind === 'pq' || o.minHeap !== undefined || undefined };
       else if (o instanceof Obj) item = { kind: 'obj', id: o.id, cls: o.cls, fields: [...o.fields].map(([k, x]) => [k, sv(x)] as [string, SnapVal]) };
@@ -488,6 +530,10 @@ export class Interp {
       return { t: 'ptr', s: `&${v.cell.label()}` };
     }
     if (v instanceof Iter) return { t: 'p', s: `iter@${v.idx}` };
+    // a string that keeps growing (s = s + s): stop before it fills the memory
+    if (typeof v === 'string' && v.length > MAX_TEXT) throw new StepLimit('size');
+    // a long string is shown by its start: a variable box cannot show 100,000 characters anyway
+    if (typeof v === 'string' && v.length > 300) return { t: 'p', s: display(v.slice(0, 300) + '…', this.lang) };
     const s = display(v, this.lang);
     if (typeof v === 'number' || v instanceof Flt || v instanceof Chr) return { t: 'p', s, n: num(v) };
     if (typeof v === 'boolean') return { t: 'p', s, n: v ? 1 : 0 };
@@ -1301,8 +1347,8 @@ export class Interp {
     if (op === '+' && (this.lang === 'cpp') && a instanceof Chr && typeof b === 'string') return String.fromCharCode(a.c) + b;
     if (py) {
       if (op === '+' && a instanceof Arr && b instanceof Arr) return new Arr([...a.items, ...b.items], a.kind === 'tuple' ? 'tuple' : 'list');
-      if (op === '*' && (a instanceof Arr || typeof a === 'string') && typeof b === 'number') return repeat(a, b);
-      if (op === '*' && (b instanceof Arr || typeof b === 'string') && typeof a === 'number') return repeat(b, a);
+      if (op === '*' && (a instanceof Arr || typeof a === 'string') && typeof b === 'number') return this.repeatChecked(a, b);
+      if (op === '*' && (b instanceof Arr || typeof b === 'string') && typeof a === 'number') return this.repeatChecked(b, a);
       if (op === '%' && typeof a === 'string') {
         const args = b instanceof Arr && b.kind === 'tuple' ? b.items : [b];
         return pyPercent(a, args);
@@ -2270,6 +2316,7 @@ export class Interp {
       const list = ie && ie.k === 'list' ? ie.items : undefined;
       const n = sizes[level] ?? (list ? list.length : 0);
       if (n < 0 || n > 100000) throw this.err(`array size ${n} is too large`);
+      if (level === 0) this.checkTotal(sizes);
       const items: Val[] = [];
       for (let i = 0; i < n; i++) {
         const sub = list?.[i];
@@ -2280,6 +2327,12 @@ export class Interp {
       return new Arr(items, 'array', elemTy);
     };
     return build(0, init);
+  }
+
+  /** int g[5000][5000], new int[5000, 5000]: every dimension may be fine but not all of them together */
+  private checkTotal(sizes: (number | null | undefined)[]) {
+    const total = sizes.reduce<number>((t, n) => t * (n ?? 1), 1);
+    if (total > MAX_CELLS) throw this.err(`an array of ${total.toLocaleString('en-US')} values is too large (the limit is 1,000,000)`);
   }
 
   private cDefault(t: Ty): Val {
@@ -2299,6 +2352,7 @@ export class Interp {
       return new Arr(items, 'array', nested ? { ...e.ty, arr: 1 } : e.ty);
     }
     const sizes = e.dims.map((d) => (d ? Math.trunc(num(this.ev(d))) : null));
+    this.checkTotal(sizes);
     const build = (level: number): Val => {
       const n = sizes[level];
       if (n === null || n === undefined) return null;

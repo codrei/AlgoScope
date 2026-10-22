@@ -14,7 +14,42 @@
     <title>AlgoScope</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" id="boot" style="max-width: 460px; margin: 18vh auto 0; padding: 0 20px; text-align: center; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #363583">
+        <div style="font-size: 26px; font-weight: 800">Algo<span style="color: #c9a700">Scope</span></div>
+        <p id="boot-msg" style="font-size: 16px; line-height: 1.5; color: #55557a">Loading AlgoScope…</p>
+      </div>
+    </div>
+    <script>
+      // Before the app loads (plain old JavaScript, so it runs in any browser):
+      // - a browser too old for the code editor gets an explanation instead of a blank page
+      //   (it needs class static blocks and regex lookbehind: iOS 16.4+, Chrome 94+, Firefox 93+);
+      // - on slow classroom Wi-Fi the first visit can take a while, so say so instead of looking stuck.
+      (function () {
+        var ok = true;
+        try {
+          new Function('class A { static { } }');
+          new RegExp('(?<=a)b');
+        } catch (e) {
+          ok = false;
+        }
+        var msg = document.getElementById('boot-msg');
+        if (!ok) {
+          window.__algoscopeTooOld = true;
+          msg.innerHTML =
+            '<b style="color:#1b1b3a">This browser is too old for AlgoScope.</b><br><br>' +
+            'iPhone or iPad: update to iOS 16.4 or newer (Settings, General, Software Update).<br>' +
+            'Android: update Chrome from the Play Store.<br>' +
+            'Or open <b>codrei.github.io/AlgoScope</b> on a laptop.';
+          return;
+        }
+        setTimeout(function () {
+          if (document.getElementById('boot-msg')) {
+            msg.innerHTML = 'Still loading… On slow Wi-Fi the first visit can take a minute.<br>Keep this page open; after that AlgoScope opens instantly.';
+          }
+        }, 15000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

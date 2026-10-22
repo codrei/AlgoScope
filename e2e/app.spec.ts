@@ -124,6 +124,7 @@ test('phone screen: no sideways scrolling and the menu works', async ({ browser 
 });
 
 test('works offline after the first visit', async ({ browser }) => {
+  test.setTimeout(150000);
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto('./?example=bubble-sort&lang=python');
@@ -131,7 +132,7 @@ test('works offline after the first visit', async ({ browser }) => {
     await navigator.serviceWorker.ready;
   });
   await page.reload(); // now controlled by the service worker, assets go into the cache
-  await page.waitForTimeout(10000); // background grammar download
+  await expect(page.locator('html')).toHaveAttribute('data-offline', 'ready', { timeout: 70000 }); // every file saved
   await context.setOffline(true);
   await page.reload();
   await page.getByRole('tab', { name: 'Java', exact: true }).click();
@@ -285,4 +286,36 @@ test('a link to a one-language example opens in that language', async ({ page })
   await expect(page.locator('.step-say')).toBeVisible();
   await page.keyboard.press('End');
   await expect(page.locator('.screen')).toContainText('Congrats');
+});
+
+test('a huge table draws only a window of it, and stays fast', async ({ page }) => {
+  await fresh(page, '?example=factorial&lang=c');
+  await page.locator('.monaco-editor').click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Delete');
+  await page.keyboard.insertText('#include <stdio.h>\nint g[1000][1000];\nint main() {\ng[500][600] = 5;\nprintf("%d", g[500][600]);\nreturn 0;\n}\n');
+  await page.keyboard.press('Control+Shift+End');
+  await page.keyboard.press('Delete');
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await expect(page.locator('.step-say').first()).toBeVisible({ timeout: 10000 });
+  await page.keyboard.press('Space');
+  await page.keyboard.press('End');
+  await expect(page.locator('.console')).toHaveText('5');
+  await page.keyboard.press('ArrowLeft'); // the step that wrote g[500][600]
+  await expect(page.locator('.cells-note').first()).toContainText('of 1000 × 1000');
+  expect(await page.locator('.gcell').count()).toBeLessThanOrEqual(900);
+});
+
+test('a browser too old for AlgoScope gets an explanation instead of a blank page', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Real = RegExp;
+    // pretend regex lookbehind is missing, as on iOS before 16.4
+    window.RegExp = function (p: string, f?: string) {
+      if (String(p).includes('(?<=')) throw new SyntaxError('Invalid regular expression');
+      return new Real(p, f);
+    } as unknown as RegExpConstructor;
+  });
+  await page.goto('./');
+  await expect(page.locator('#boot-msg')).toContainText('This browser is too old for AlgoScope.');
+  await expect(page.locator('#boot-msg')).toContainText('iOS 16.4');
 });

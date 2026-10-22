@@ -22,7 +22,8 @@ function precacheList(): Plugin {
     generateBundle(_, bundle) {
       const files = [
         './',
-        ...Object.keys(bundle).filter((f) => f !== 'index.html'),
+        // .woff fonts are only for browsers too old for .woff2, which cannot run AlgoScope anyway
+        ...Object.keys(bundle).filter((f) => f !== 'index.html' && !f.endsWith('.woff')),
         ...filesIn('public').filter((f) => f !== 'sw.js' && !f.startsWith('screenshots/')),
       ];
       this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify(files) });

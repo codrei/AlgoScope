@@ -1,6 +1,6 @@
 import type { HeapArr, HeapItem, HeapMap, HeapObj, SnapVal, Step } from '../engine/trace';
 import type { CallNode } from '../lib/analysis';
-import { cellText, Label, rolesFor } from './ArrayView';
+import { cellText, Label, rolesFor, windowFor } from './ArrayView';
 
 /** 2D arrays / matrices / DP tables / adjacency lists. */
 export function Grid2D({ item, names, step }: { item: HeapArr; names: string[]; step: Step }) {
@@ -13,20 +13,26 @@ export function Grid2D({ item, names, step }: { item: HeapArr; names: string[]; 
   // when a cell is being computed, the cells it was read from are its sources (DP: "built from")
   const computing = rowRoles.some((m) => [...m.values()].includes('write'));
   const tooBig = cols > 30 || rows.length > 30;
+  // big tables (int g[1000][1000]): only a 30 × 30 window around the cells in use is drawn
+  const rw = windowFor(rows.length, [...outerRoles.keys(), ...rowRoles.flatMap((m, i) => (m.size ? [i] : []))], 30);
+  const cw = windowFor(cols, hotCols, 30);
+  const colIdx = Array.from({ length: cw.end - cw.first }, (_, k) => cw.first + k);
+  const windowed = rw.end - rw.first < rows.length || cw.end - cw.first < cols;
   return (
     <div className="struct">
       <Label names={names} kind="2D" n={rows.length} sorted={false} />
       <div className="graph-wrap">
-        <div className="grid2d" style={{ gridTemplateColumns: `auto repeat(${cols}, minmax(${tooBig ? 26 : 40}px, auto))` }}>
+        <div className="grid2d" style={{ gridTemplateColumns: `auto repeat(${colIdx.length}, minmax(${tooBig ? 26 : 40}px, auto))` }}>
           <div />
-          {Array.from({ length: cols }, (_, c) => (
+          {colIdx.map((c) => (
             <div key={c} className={`ghead ${hotCols.has(c) ? 'hot' : ''}`}>{c}</div>
           ))}
-          {rows.map((r, ri) => {
+          {rows.slice(rw.first, rw.end).map((r, k) => {
+            const ri = rw.first + k;
             const hotRow = outerRoles.has(ri) || rowRoles[ri].size > 0;
             return [
               <div key={`h${ri}`} className={`ghead ${hotRow ? 'hot' : ''}`}>{ri}</div>,
-              ...Array.from({ length: cols }, (_, c) => {
+              ...colIdx.map((c) => {
                 if (!r || r.kind !== 'arr' || c >= r.items.length) return <div key={`${ri}-${c}`} />;
                 const r0 = rowRoles[ri].get(c) ?? '';
                 const role = r0 === 'read' && computing ? 'source' : r0;
@@ -40,12 +46,20 @@ export function Grid2D({ item, names, step }: { item: HeapArr; names: string[]; 
           })}
         </div>
       </div>
+      {windowed && (
+        <p className="cells-note">
+          Showing rows {rw.first}–{rw.end - 1} and columns {cw.first}–{cw.end - 1} of {rows.length} × {cols}. Tables of about 10 × 10 are easier to follow.
+        </p>
+      )}
     </div>
   );
 }
 
 export function MapView({ item, names, step }: { item: HeapMap; names: string[]; step: Step }) {
   const show = (v: SnapVal) => (v.t === 'r' ? describeRef(step, v.id) : cellText(v));
+  // a dictionary with thousands of keys: the first 100 are drawn
+  const entries = item.entries.length > 100 ? item.entries.slice(0, 100) : item.entries;
+  const more = item.entries.length - entries.length;
   return (
     <div className="struct">
       <Label names={names} kind={item.isSet ? 'set' : 'map'} n={item.entries.length} sorted={false} />
@@ -53,18 +67,20 @@ export function MapView({ item, names, step }: { item: HeapMap; names: string[];
         <div className="map-view set"><div className="mh">empty</div></div>
       ) : item.isSet ? (
         <div className="cells" style={{ paddingTop: 6 }}>
-          {item.entries.map(([k], i) => (
+          {entries.map(([k], i) => (
             <div className="cell-col" key={i}><div className="cell">{show(k)}</div></div>
           ))}
+          {more > 0 && <div className="cell-col"><div className="cell null">+{more}</div></div>}
         </div>
       ) : (
         <div className="map-view">
           <div className="mh mk">key</div>
           <div className="mh">value</div>
-          {item.entries.map(([k, v], i) => [
+          {entries.map(([k, v], i) => [
             <div className="mk" key={`k${i}`}>{show(k)}</div>,
             <div key={`v${i}`}>{show(v)}</div>,
           ])}
+          {more > 0 && [<div className="mk" key="more">…</div>, <div key="more-v">{more} more</div>]}
         </div>
       )}
     </div>
@@ -108,21 +124,25 @@ function scalarLabel(o: HeapObj): string {
 
 const BACK_FIELDS = new Set(['prev', 'parent', 'previous', 'back']);
 
+/** the most nodes of a linked list or tree that are drawn */
+const MAX_NODES = 60;
+
 export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; roots: { name: string; id: number; label: boolean }[] }) {
-  // collect reachable objects
-  const objs = new Map<number, HeapObj>();
+  // collect reachable objects, nearest first; a list or tree of hundreds of nodes draws only the first 60
+  const all = new Map<number, HeapObj>();
   const queue = roots.map((r) => r.id);
-  while (queue.length) {
-    const id = queue.shift()!;
-    if (objs.has(id)) continue;
+  for (let q = 0; q < queue.length; q++) {
+    const id = queue[q];
+    if (all.has(id)) continue;
     const h = step.heap[id];
     if (!h || h.kind !== 'obj') continue;
-    objs.set(id, h);
+    all.set(id, h);
     for (const [, v] of h.fields) {
       if ((v.t === 'r' || v.t === 'ptr') && v.id !== undefined) queue.push(v.id);
     }
   }
-  if (!objs.size) return null;
+  if (!all.size) return null;
+  const objs = all.size > MAX_NODES ? new Map([...all].slice(0, MAX_NODES)) : all;
 
   const childRefs = (o: HeapObj) =>
     o.fields
@@ -265,7 +285,8 @@ export function GraphView({ step, prev, roots }: { step: Step; prev?: Step; root
       <div className="struct-label">
         <b>{isTree ? 'tree' : backEdges.length ? 'doubly linked nodes' : 'linked nodes'}</b>
         <span className="kind">{[...new Set([...objs.values()].map((o) => o.cls))].join(', ')}</span>
-        <span>{objs.size} node{objs.size === 1 ? '' : 's'}</span>
+        <span>{all.size} node{all.size === 1 ? '' : 's'}</span>
+        {objs.size < all.size && <span className="struct-info">showing the first {objs.size}</span>}
       </div>
       <div className="graph-wrap">
         <svg className="graph-svg" width={Math.max(width + 20, 200)} height={height} role="img" aria-label="linked structure">

@@ -73,6 +73,21 @@ interface Props {
   held?: { name: string; value: string };
 }
 
+/** the most cells of one array that are drawn; a bigger array shows a window of it */
+export const MAX_SHOWN = 100;
+
+/**
+ * Big arrays (int a[1000]): drawing every cell would make each step slow, and tiny cells are unreadable.
+ * Only a window is drawn, starting at 0 or around the cells the step is working on.
+ */
+export function windowFor(n: number, active: Iterable<number>, max = MAX_SHOWN): { first: number; end: number } {
+  if (n <= max) return { first: 0, end: n };
+  const hot = [...active].filter((i) => i >= 0 && i < n);
+  const focus = hot.length ? Math.min(...hot) : 0;
+  const first = focus < max - 10 ? 0 : Math.min(Math.max(0, focus - 20), n - max);
+  return { first, end: first + max };
+}
+
 export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big, fieldMarkers, info, activeRange, gapAt, held }: Props) {
   const roles = rolesFor(step, item.id);
   const n = item.items.length;
@@ -89,18 +104,22 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
     for (const i of roles.keys()) used = Math.max(used, i);
     shown = Math.min(n, used + 2);
   }
-  const visible = shown < n ? item.items.slice(0, shown) : item.items;
+  const { first, end } = windowFor(shown, [...roles.keys(), ...markers.keys()]);
+  const windowed = end - first < shown;
+  const lead = first > 0 ? 1 : 0;
+  const visible = item.items.slice(first, end);
   const maxLen = Math.max(1, ...visible.map((v) => cellText(v).length));
   const box = useRef<HTMLDivElement>(null);
   const width = useWidth(box);
-  const { cell, font, gap } = sizing(shown + (shown < n ? 1 : 0), maxLen, !!big, width);
+  const { cell, font, gap } = sizing(lead + (end - first) + (end < n ? 1 : 0), maxLen, !!big, width);
   const pitch = cell + gap;
   const kind = item.arrKind;
 
   // pair of cells highlighted together -> bracket with the operator
   const cmp = [...roles].filter(([, r]) => r === 'compare').map(([i]) => i);
   const swp = [...roles].filter(([, r]) => r === 'swap').map(([i]) => i);
-  const pair = swp.length === 2 ? swp : cmp.length === 2 ? cmp : null;
+  const pairAll = swp.length === 2 ? swp : cmp.length === 2 ? cmp : null;
+  const pair = pairAll && pairAll.every((i) => i >= first && i < end) ? pairAll : null;
   const op = swp.length === 2 ? '⇄' : compareOp(step.text) ?? '';
   const swapAnim = swp.length === 2 ? { a: Math.min(...swp), b: Math.max(...swp) } : null;
   // a value copied inside this array slides from where it came from; a value from a variable drops in
@@ -128,12 +147,13 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
         <Label names={names} kind="stack" n={n} sorted={false} />
         <div className="stack-view" style={style}>
           {n === 0 && <div className="cell null" style={{ width: 104, height: 40 }}>empty</div>}
-          {[...item.items].map((v, i) => ({ v, i })).reverse().map(({ v, i }) => (
+          {item.items.map((v, i) => ({ v, i })).slice(-40).reverse().map(({ v, i }) => (
             <div className="stack-row" key={i}>
               <div className={`cell ${roles.get(i) ?? ''} ${v.t === 'null' ? 'null' : ''}`}>{cellText(v)}</div>
               <span className="stack-tag">{i === n - 1 ? '← top' : ''}</span>
             </div>
           ))}
+          {n > 40 && <div className="stack-row"><div className="cell null">+{n - 40} below</div></div>}
           <div className="stack-base" />
         </div>
       </div>
@@ -149,12 +169,19 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
         {pair && (
           <div
             className={`bracket ${swp.length === 2 ? 'swap' : ''}`}
-            style={{ left: 6 + Math.min(...pair) * pitch + cell / 4, width: Math.abs(pair[1] - pair[0]) * pitch + cell / 2 }}
+            style={{ left: 6 + (Math.min(...pair) - first + lead) * pitch + cell / 4, width: Math.abs(pair[1] - pair[0]) * pitch + cell / 2 }}
           >
             <span>{op}</span>
           </div>
         )}
-        {visible.map((v, i) => {
+        {lead > 0 && (
+          <div className="cell-col" title={`cells 0 to ${first - 1} are not shown`}>
+            <div className="cell null">+{first}</div>
+            <div className="cell-idx">0…</div>
+          </div>
+        )}
+        {visible.map((v, k) => {
+          const i = first + k;
           const role = roles.get(i);
           const isLocked = locked.has(i) && role !== 'compare' && role !== 'swap';
           let anim = '';
@@ -192,13 +219,18 @@ export function ArrayView({ item, names, step, stepIndex, locked, allLocked, big
             </div>
           );
         })}
-        {shown < n && (
-          <div className="cell-col" title={`${n - shown} more empty cells ('\\0')`}>
-            <div className="cell null">+{n - shown}</div>
+        {end < n && (
+          <div className="cell-col" title={end < shown ? `${n - end} more cells are not shown` : `${n - shown} more empty cells ('\\0')`}>
+            <div className="cell null">+{n - end}</div>
             <div className="cell-idx">…{n - 1}</div>
           </div>
         )}
       </div>
+      {windowed && (
+        <p className="cells-note">
+          Showing cells {first}–{end - 1} of {n}. Arrays of about 10–100 values are easier to follow.
+        </p>
+      )}
     </div>
   );
 }

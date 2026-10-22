@@ -104,7 +104,7 @@ export function HelpDialog({ onClose, phone }: { onClose: () => void; phone?: bo
         <p className="notice">
           It is a teaching interpreter, not a full compiler: threads, files, LINQ/streams and most of the standard
           library beyond the collections above are not supported, and AlgoScope tells you which line if it meets one.
-          Animations stop after 5,000 steps, so use small inputs (about 5–10 elements).
+          Animations stop after 5,000 steps, so use small inputs (about 5–10 elements). Very big data is limited so it cannot freeze your phone or laptop: big arrays show a window of 100 cells, and a run stops if its data grows past a few million values.
         </p>
       </div>
     </div>

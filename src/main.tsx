@@ -6,14 +6,17 @@ import '@fontsource/jetbrains-mono/700.css';
 import './index.css';
 import App from './App.tsx';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+// index.html already explained that this browser is too old (only reached when testing that message)
+if (!(window as Window & { __algoscopeTooOld?: boolean }).__algoscopeTooOld) {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
 
 // Offline support (production only): the service worker answers from the cache when there is no
-// internet. A few seconds after the page opens, every file of the app (all five languages' grammars,
+// internet. Half a minute after the page opens, every file of the app (all five languages' grammars,
 // fonts, the editor) is saved, so the installed app also opens and runs offline. Files of older
 // versions are removed.
 const CACHE = 'algoscope-v1';
@@ -37,6 +40,7 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   const base = import.meta.env.BASE_URL;
   navigator.serviceWorker
     .register(`${base}sw.js`)
-    .then(() => window.setTimeout(() => saveForOffline(base).catch(() => undefined), 8000))
+    // not right away: when a whole class opens AlgoScope at once on one Wi-Fi, the first page loads come first
+    .then(() => window.setTimeout(() => saveForOffline(base).catch(() => undefined), 30000))
     .catch(() => undefined);
 }

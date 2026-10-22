@@ -110,8 +110,8 @@ Open **Settings → Install as an app**:
 
 ## Offline use
 
-After AlgoScope has been opened once (with internet), it keeps a copy of every file in the browser, a few seconds
-after the page opens. It then opens and runs all five languages without internet, in the browser and as an
+After AlgoScope has been opened once (with internet), it keeps a copy of every file in the browser, about half a
+minute after the page opens (later than the page itself, so a whole class loading at once shares the Wi-Fi better). It then opens and runs all five languages without internet, in the browser and as an
 installed app, which is useful if the classroom Wi-Fi is unreliable. Open it once before class.
 
 ## 2. Running an algorithm
@@ -221,7 +221,14 @@ runaway recursion or a missing indent each stop with a plain message on the righ
 5,000 steps with a hint to check the loop condition.
 
 **Limits:** a run stops after 5,000 steps so the animation stays readable. Use small inputs (about 5–10
-elements) for animations, and the Complexity Lab for bigger sizes.
+elements) for animations, and the Complexity Lab for bigger sizes. So that no program can freeze or crash a
+phone or laptop:
+
+- one array, list, vector, string or `malloc` holds at most 1,000,000 values (`[0] * 10**9` is an error right away);
+- every step keeps a copy of the data it changed, so a run also stops when those copies reach 3 million values in
+  all (for example a 20,000-element array filled in a loop), with a note saying why;
+- big arrays draw a window of 100 cells around the cells in use, tables a 30 × 30 window, maps their first 100
+  keys and linked lists or trees their first 60 nodes, with a note saying what is shown.
 
 ## 6. In the classroom
 

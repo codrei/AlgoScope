@@ -154,10 +154,10 @@ test('the Install button shows in the top bar while the browser offers it', asyn
 });
 
 test('after the first visit AlgoScope opens and runs without internet, in every language', async ({ page, context }) => {
-  test.setTimeout(90000);
+  test.setTimeout(150000);
   await fresh(page, '?example=bubble-sort&lang=cpp');
   // every file is saved a few seconds after the page opens
-  await expect(html(page)).toHaveAttribute('data-offline', 'ready', { timeout: 45000 });
+  await expect(html(page)).toHaveAttribute('data-offline', 'ready', { timeout: 70000 });
   await context.setOffline(true);
   await page.goto('./?example=binary-search&lang=java&run=1');
   await expect(page.locator('.step-say').first()).toBeVisible({ timeout: 20000 });

@@ -99,6 +99,8 @@ export interface Trace {
   error?: { msg: string; line: number };
   /** the program was stopped at the step limit */
   truncated?: boolean;
+  /** why: 5,000 steps, or the saved data got too big */
+  truncatedBy?: 'steps' | 'size';
   /** totals from a counts-only run */
   finalCounts?: Counts & { steps: number };
 }

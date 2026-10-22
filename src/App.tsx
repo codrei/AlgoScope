@@ -535,10 +535,21 @@ export default function App() {
                 The code changed since this run. <button className="m-link" onClick={run}>Run the new code</button>
               </div>
             )}
-            {trace?.truncated && atEnd && (
+            {/* at the last step the controls reach (Key steps may skip the very last saved step) */}
+            {trace?.truncated && total > 0 && pos >= total - 1 && (
               <div className="notice" role="status">
-                Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. If a loop never ends, check
-                that its condition can become false (is the counter changing?). Otherwise try a smaller input.
+                {trace.truncatedBy === 'size' ? (
+                  <>
+                    Stopped after {trace.steps.length.toLocaleString()} steps: the arrays, lists or strings got too big to save at
+                    every step (over 3 million values in all). Use smaller data, about 10–100 values, to watch it; the Complexity
+                    Lab measures big inputs.
+                  </>
+                ) : (
+                  <>
+                    Stopped after {trace.steps.length.toLocaleString()} steps so the animation stays readable. If a loop never ends,
+                    check that its condition can become false (is the counter changing?). Otherwise try a smaller input.
+                  </>
+                )}
               </div>
             )}
             <Visualizer header={header} trace={trace} stepIndex={stepIndex} position={pos} viewTotal={total} caption={step && !edited && !stale ? captionFor(example.id, step, stepIndex, info) : null} moment={step && !edited && !stale ? momentFor(example.id, step, stepIndex, info) : null} quiz={quiz && quiz.step === stepIndex ? quiz : null} onAnswer={answer} score={score} locks={locks} calls={calls} importance={importance} gaps={gaps[stepIndex]} mode={viewMode} onMode={setMode} code={traceCode || code} present={isPresent} phone={phone} summary={exampleRun ? { title: example.title, time: example.time, topic: example.topic } : null} onLab={exampleRun && labKind(example) ? () => setLab(true) : undefined} />

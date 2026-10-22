@@ -114,6 +114,9 @@ export function libraryNew(I: Interp, t: Ty, vals: Val[], exprs?: Expr[]): Val {
       const n = num(v0);
       if (n > 100000) throw I.err(`vector size ${n} is too large`);
       const fill = vals.length > 1 ? vals[1] : I.defaultFor(elemTy ?? { base: 'int', arr: 0, ptr: 0 }, false) ?? 0;
+      // vector<vector<int>> g(5000, vector<int>(5000)): fine one by one, too many values together
+      const total = n * (fill instanceof Arr ? Math.max(1, fill.items.length) : 1);
+      if (total > 1_000_000) throw I.err(`a vector of ${total.toLocaleString('en-US')} values is too large (the limit is 1,000,000)`);
       for (let i = 0; i < n; i++) a.items.push(fill instanceof Arr ? new Arr([...fill.items], fill.kind, fill.elemTy) : fill);
     } else if (v0 instanceof Arr) {
       a.items = [...v0.items];
@@ -684,6 +687,7 @@ function cFunction(I: Interp, name: string, args: Expr[]): R {
       }
       if (info && info.ty) {
         const n = info.count ? num(I.ev(info.count)) : 1;
+        if (n > 1_000_000) throw I.err(`${name} of ${n.toLocaleString('en-US')} items is too large (the limit is 1,000,000)`);
         const items: Val[] = [];
         for (let i = 0; i < n; i++) items.push(I.classes.has(info.ty.base) && !info.ty.ptr ? I.construct(info.ty.base, []) : I.defaultFor(info.ty, false) ?? 0);
         return new Arr(items, 'array', info.ty);

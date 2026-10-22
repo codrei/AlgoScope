@@ -16,6 +16,26 @@ after an update).
   - `https://codrei.github.io/AlgoScope/?example=heap-sort&lang=java&run=1&present=1`
   - `https://codrei.github.io/AlgoScope/?example=quick-sort&lang=cpp&lab=1`
 
+## Using it with a whole class (20+ students at once)
+
+AlgoScope has no server doing the work: GitHub only sends the files (about 2 MB, through a large CDN), and every
+student's own browser runs the code. So 20, 40 or 100 students at once are no problem for the site. Each student
+works alone; nothing is shared between them. What can go wrong is on the students' side:
+
+- [ ] **Weak Wi-Fi is the real limit.** 20 students opening it at the same second share about 40 MB. Ask them to
+      open the link **before** the activity (or at home): after one visit it is saved on the device, opens
+      instantly and even works without internet. While it loads the page says *Loading AlgoScope…*, and on slow
+      Wi-Fi *Still loading…* (so they don't keep reloading).
+- [ ] **Plan B if the internet is down:** on the teacher's laptop, unzip the release download and run
+      `python -m http.server 8000` in that folder, then students on the same Wi-Fi open
+      `http://<laptop's IP address>:8000/` (checked: everything works from such an address).
+- [ ] **Old phones:** an iPhone needs iOS 16.4 or newer (iPhone 8 and later, updated); Android needs an up-to-date
+      Chrome. An older phone shows a message saying exactly that instead of a blank page; those students can pair
+      up with a classmate or use a laptop.
+- [ ] **Student code that is far too big** (`int a[1000000]` filled in a loop, `[0] * 10**9`, a string that doubles
+      forever) stops in about a second with a clear message instead of freezing the tab.
+- [ ] Don't push an update to the site during the class; students would get it only after a reload anyway.
+
 ## Phone check (3 minutes, on a real phone)
 
 - [ ] Open the site: the **Code** tab shows the editor and a yellow **Run** button at the bottom.
